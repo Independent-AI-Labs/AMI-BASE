@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.main import ModelMetaclass
 
 from .exceptions import ConfigurationError
-from .storage_types import ModelMetadata, StorageType
+from .storage_types import ModelMetadata, StorageConfig, StorageType
 
 if TYPE_CHECKING:
     from .dao import BaseDAO
@@ -24,21 +24,29 @@ class StorageModelMeta(ModelMetaclass):
         # Process Meta class if present
         if "Meta" in namespace:
             meta = namespace["Meta"]
+
+            # Handle both old single storage_type and new storage_configs
+            if hasattr(meta, "storage_configs"):
+                storage_configs = meta.storage_configs
+            elif hasattr(meta, "storage_type"):
+                # Backward compatibility: convert single storage_type to configs
+                storage_type = meta.storage_type
+                storage_configs = {"primary": StorageConfig(storage_type=storage_type)}
+            else:
+                # Default to document storage
+                storage_configs = {"primary": StorageConfig(storage_type=StorageType.DOCUMENT)}
+
             metadata = ModelMetadata(
-                storage_type=getattr(meta, "storage_type", StorageType.DOCUMENT),
-                collection=getattr(meta, "collection", name.lower() + "s"),
+                storage_configs=storage_configs,
+                path=getattr(meta, "path", name.lower() + "s"),
+                uid=getattr(meta, "uid", "id"),
                 indexes=getattr(meta, "indexes", []),
-                unique_indexes=getattr(meta, "unique_indexes", []),
-                partition_key=getattr(meta, "partition_key", None),
-                sort_key=getattr(meta, "sort_key", None),
-                ttl=getattr(meta, "ttl", None),
-                vector_dimensions=getattr(meta, "vector_dimensions", None),
-                vector_index_type=getattr(meta, "vector_index_type", "ivfflat"),
+                options=getattr(meta, "options", {}),
             )
             cls_obj._metadata = metadata
         elif not hasattr(cls_obj, "_metadata"):
             # Default metadata if not inherited
-            cls_obj._metadata = ModelMetadata(storage_type=StorageType.DOCUMENT, collection=name.lower() + "s")
+            cls_obj._metadata = ModelMetadata(storage_configs={"primary": StorageConfig(storage_type=StorageType.DOCUMENT)}, path=name.lower() + "s")
 
         return cls_obj
 
@@ -49,7 +57,7 @@ class StorageModel(BaseModel, metaclass=StorageModelMeta):
     model_config = ConfigDict(arbitrary_types_allowed=True, use_enum_values=True, validate_assignment=True)
 
     _metadata: ClassVar[ModelMetadata]
-    _dao: ClassVar["BaseDAO" | None] = None
+    _daos: ClassVar[dict[str, "BaseDAO"]] = {}
 
     # Common fields that can be overridden
     id: str | None = Field(default_factory=lambda: str(uuid4()))
@@ -66,21 +74,49 @@ class StorageModel(BaseModel, metaclass=StorageModelMeta):
     @classmethod
     def get_collection_name(cls) -> str:
         """Get collection/table name"""
-        return cls.get_metadata().collection
+        return cls.get_metadata().path
 
     @classmethod
-    def get_storage_type(cls) -> StorageType:
-        """Get storage type for this model"""
-        return cls.get_metadata().storage_type
+    def get_storage_configs(cls) -> dict[str, StorageConfig]:
+        """Get storage configurations for this model"""
+        return cls.get_metadata().storage_configs
 
     @classmethod
-    def get_dao(cls) -> "BaseDAO":
-        """Get or create DAO instance for this model"""
-        if cls._dao is None:
+    def get_primary_storage_config(cls) -> StorageConfig:
+        """Get primary storage configuration"""
+        metadata = cls.get_metadata()
+        # Return first config as primary
+        return next(iter(metadata.storage_configs.values()))
+
+    @classmethod
+    def get_dao(cls, storage_name: str = None) -> "BaseDAO":
+        """Get or create DAO instance for specific storage or primary"""
+        metadata = cls.get_metadata()
+
+        # Use first storage if not specified
+        if storage_name is None:
+            storage_name = next(iter(metadata.storage_configs.keys()))
+
+        if storage_name not in cls._daos:
             from .dao import DAOFactory
 
-            cls._dao = DAOFactory.create(cls)
-        return cls._dao
+            # Get the specific storage config
+            if storage_name not in metadata.storage_configs:
+                raise ConfigurationError(f"Storage '{storage_name}' not configured")
+
+            storage_config = metadata.storage_configs[storage_name]
+            cls._daos[storage_name] = DAOFactory.create(cls, storage_config)
+
+        return cls._daos[storage_name]
+
+    @classmethod
+    def get_all_daos(cls) -> dict[str, "BaseDAO"]:
+        """Get DAOs for all configured storages"""
+        metadata = cls.get_metadata()
+        daos = {}
+        for storage_name in metadata.storage_configs:
+            daos[storage_name] = cls.get_dao(storage_name)
+        return daos
 
     @classmethod
     async def create(cls, **kwargs) -> "StorageModel":

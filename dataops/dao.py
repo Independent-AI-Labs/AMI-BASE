@@ -17,7 +17,7 @@ class BaseDAO(ABC, Generic[T]):
     def __init__(self, model_cls: type[T], config: StorageConfig | None = None):
         self.model_cls = model_cls
         self.metadata = model_cls.get_metadata()
-        self.collection_name = self.metadata.collection
+        self.collection_name = self.metadata.path
         self.config = config
 
     @abstractmethod
@@ -85,28 +85,32 @@ class BaseDAO(ABC, Generic[T]):
         """Execute raw write query and return affected rows"""
 
     @abstractmethod
-    async def list_databases(self) -> list[dict[str, Any]]:
-        """List all available databases"""
+    async def list_databases(self) -> list[str]:
+        """List all databases/namespaces/buckets in storage"""
 
     @abstractmethod
-    async def list_schemas(self, database: str | None = None) -> list[dict[str, Any]]:
-        """List all schemas in a database"""
+    async def list_schemas(self, database: str | None = None) -> list[str]:
+        """List all schemas/collections/directories in a database"""
 
     @abstractmethod
-    async def list_tables(self, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
-        """List all tables in a database/schema"""
+    async def list_models(self, database: str | None = None, schema: str | None = None) -> list[str]:
+        """List all models (tables/collections/graphs/file types) in current storage"""
 
     @abstractmethod
-    async def get_table_info(self, table: str, database: str | None = None, schema: str | None = None) -> dict[str, Any]:
-        """Get detailed information about a table"""
+    async def get_model_info(self, path: str, database: str | None = None, schema: str | None = None) -> dict[str, Any]:
+        """Get information about a model"""
 
     @abstractmethod
-    async def get_table_columns(self, table: str, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
-        """Get column information for a table"""
+    async def get_model_schema(self, path: str, database: str | None = None, schema: str | None = None) -> dict[str, Any]:
+        """Get schema/structure information for a model"""
 
     @abstractmethod
-    async def get_table_indexes(self, table: str, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
-        """Get index information for a table"""
+    async def get_model_fields(self, path: str, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
+        """Get field/property/attribute information for a model"""
+
+    @abstractmethod
+    async def get_model_indexes(self, path: str, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
+        """Get index information for a model"""
 
     @abstractmethod
     async def test_connection(self) -> bool:
@@ -152,9 +156,9 @@ class DAOFactory:
             cls._configs[storage_type] = config
 
     @classmethod
-    def create(cls, model_cls: type[StorageModel]) -> BaseDAO:
-        """Create appropriate DAO for model"""
-        storage_type = model_cls.get_storage_type()
+    def create(cls, model_cls: type[StorageModel], storage_config: StorageConfig) -> BaseDAO:
+        """Create appropriate DAO for model with specific storage config"""
+        storage_type = storage_config.storage_type
 
         if storage_type not in cls._dao_classes:
             # Try to import and register the appropriate DAO
@@ -164,9 +168,9 @@ class DAOFactory:
             raise StorageError(f"No DAO registered for storage type: {storage_type}")
 
         dao_class = cls._dao_classes[storage_type]
-        config = cls._configs.get(storage_type)
 
-        return dao_class(model_cls, config)
+        # Use provided config instead of global config
+        return dao_class(model_cls, storage_config)
 
     @classmethod
     def _auto_register(cls, storage_type: StorageType):

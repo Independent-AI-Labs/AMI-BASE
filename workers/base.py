@@ -52,6 +52,7 @@ class WorkerPool(ABC, Generic[T, R]):
         # Control
         self._lock = asyncio.Lock()
         self._shutdown = False
+        self._worker_available = asyncio.Condition()  # Event for worker availability
         self._health_check_task: asyncio.Task | None = None
         self._warmup_task: asyncio.Task | None = None
         self._hibernation_task: asyncio.Task | None = None
@@ -173,12 +174,12 @@ class WorkerPool(ABC, Generic[T, R]):
 
             await asyncio.sleep(0.1)
 
-    async def acquire_worker(self, timeout: float | None = None) -> str:
+    async def acquire_worker(self, timeout: float | None = None) -> str:  # noqa: C901
         """Acquire a worker from the pool"""
         timeout = timeout or self.config.acquire_timeout
-        start_time = time.time()
 
-        while not self._shutdown:
+        async def _try_acquire() -> str | None:
+            """Try to acquire a worker without waiting"""
             async with self._lock:
                 # Try to get an available worker
                 if self.available:
@@ -203,29 +204,44 @@ class WorkerPool(ABC, Generic[T, R]):
                     self.stats.hibernating_workers -= 1
                     self.stats.busy_workers += 1
                     return worker_id
+            return None
 
-            # Try to create a new worker if under max
-            if len(self.all_workers) < self.config.max_workers:
-                worker_id = await self._add_worker()
-                if worker_id:
-                    async with self._lock:
-                        worker_info = self.all_workers[worker_id]
-                        if worker_id in self.available:
-                            self.available.remove(worker_info)
-                        self.busy[worker_id] = worker_info
-                        worker_info.state = WorkerState.BUSY
-                        worker_info.last_activity = datetime.now()
-                        self.stats.idle_workers = max(0, self.stats.idle_workers - 1)
-                        self.stats.busy_workers += 1
-                    return worker_id
+        # First attempt - immediate check
+        worker_id = await _try_acquire()
+        if worker_id:
+            return worker_id
 
-            # Check timeout
-            if (time.time() - start_time) > timeout:
-                raise TimeoutError(f"Failed to acquire worker within {timeout} seconds")
+        # Try to create a new worker if under max
+        if len(self.all_workers) < self.config.max_workers:
+            worker_id = await self._add_worker()
+            if worker_id:
+                async with self._lock:
+                    worker_info = self.all_workers[worker_id]
+                    if worker_info in self.available:
+                        self.available.remove(worker_info)
+                    self.busy[worker_id] = worker_info
+                    worker_info.state = WorkerState.BUSY
+                    worker_info.last_activity = datetime.now()
+                    self.stats.idle_workers = max(0, self.stats.idle_workers - 1)
+                    self.stats.busy_workers += 1
+                return worker_id
 
-            await asyncio.sleep(0.1)
+        # Wait for a worker to become available
+        try:
+            async with self._worker_available:
+                await asyncio.wait_for(self._worker_available.wait_for(lambda: bool(self.available or self.hibernating or self._shutdown)), timeout=timeout)
+        except asyncio.TimeoutError as e:
+            raise TimeoutError(f"Failed to acquire worker within {timeout} seconds") from e
 
-        raise RuntimeError("Pool is shutting down")
+        if self._shutdown:
+            raise RuntimeError("Pool is shutting down")
+
+        # Try again after notification
+        worker_id = await _try_acquire()
+        if worker_id:
+            return worker_id
+
+        raise RuntimeError("Failed to acquire worker")
 
     async def release_worker(self, worker_id: str) -> None:
         """Release a worker back to the pool"""
@@ -249,6 +265,10 @@ class WorkerPool(ABC, Generic[T, R]):
                     self.stats.busy_workers -= 1
                     self.stats.idle_workers += 1
 
+        # Notify waiters that a worker is available (outside lock to avoid deadlock)
+        async with self._worker_available:
+            self._worker_available.notify()
+
     async def _add_worker(self) -> str | None:
         """Add a new worker to the pool"""
         try:
@@ -268,6 +288,10 @@ class WorkerPool(ABC, Generic[T, R]):
                 self._store_worker_instance(worker_id, worker)
                 self.stats.total_workers += 1
                 self.stats.idle_workers += 1
+
+            # Notify waiters that a worker is available
+            async with self._worker_available:
+                self._worker_available.notify()
 
             return worker_id
         except Exception as e:
@@ -313,7 +337,8 @@ class WorkerPool(ABC, Generic[T, R]):
             return True
 
         # Check error rate
-        if worker_info.task_count > 0 and worker_info.error_count / worker_info.task_count > 0.5:
+        error_rate_threshold = 0.5
+        if worker_info.task_count > 0 and worker_info.error_count / worker_info.task_count > error_rate_threshold:
             return True
 
         return False
@@ -513,6 +538,7 @@ class WorkerPoolManager:
                 raise ValueError(f"Pool '{config.name}' already exists")
 
             # Create appropriate pool based on type
+            pool: WorkerPool
             if config.pool_type == PoolType.THREAD:
                 from .thread_pool import ThreadWorkerPool
 
