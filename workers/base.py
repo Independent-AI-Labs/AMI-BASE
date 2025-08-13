@@ -50,9 +50,9 @@ class WorkerPool(ABC, Generic[T, R]):
         )
 
         # Control
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None  # Created when needed
         self._shutdown = False
-        self._worker_available = asyncio.Condition()  # Event for worker availability
+        self._worker_available: asyncio.Condition | None = None  # Created when needed
         self._health_check_task: asyncio.Task | None = None
         self._warmup_task: asyncio.Task | None = None
         self._hibernation_task: asyncio.Task | None = None
@@ -85,8 +85,48 @@ class WorkerPool(ABC, Generic[T, R]):
     async def _wake_worker(self, worker: T) -> None:
         """Wake worker from hibernation"""
 
+    def _ensure_lock(self) -> asyncio.Lock:
+        """Ensure lock is created in the current event loop"""
+        try:
+            # Check if we have a lock and if it's for the current loop
+            if self._lock is not None:
+                # Try to access the lock's loop - if it fails, we need a new lock
+                _ = self._lock._loop  # type: ignore[attr-defined] # noqa: SLF001
+                current_loop = asyncio.get_running_loop()
+                if self._lock._loop != current_loop:  # type: ignore[attr-defined] # noqa: SLF001
+                    # Different loop, create new lock
+                    self._lock = asyncio.Lock()
+            else:
+                self._lock = asyncio.Lock()
+        except (AttributeError, RuntimeError):
+            # Lock doesn't have _loop or no running loop, create new
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    def _ensure_condition(self) -> asyncio.Condition:
+        """Ensure condition is created in the current event loop"""
+        try:
+            # Check if we have a condition and if it's for the current loop
+            if self._worker_available is not None:
+                # Try to access the condition's loop - if it fails, we need a new condition
+                current_loop = asyncio.get_running_loop()
+                cond_loop = self._worker_available._loop  # type: ignore[attr-defined] # noqa: SLF001
+                if cond_loop != current_loop:
+                    # Different loop, create new condition
+                    self._worker_available = asyncio.Condition()
+            else:
+                self._worker_available = asyncio.Condition()
+        except (AttributeError, RuntimeError):
+            # Condition doesn't have _loop or no running loop, create new
+            self._worker_available = asyncio.Condition()
+        return self._worker_available
+
     async def initialize(self) -> None:
         """Initialize the worker pool"""
+        # Create async primitives in the correct event loop
+        self._lock = asyncio.Lock()
+        self._worker_available = asyncio.Condition()
+
         await self._ensure_min_workers()
 
         # Start background tasks
@@ -142,7 +182,7 @@ class WorkerPool(ABC, Generic[T, R]):
             timeout=kwargs.pop("_timeout", None),
         )
 
-        async with self._lock:
+        async with self._ensure_lock():
             self.pending_tasks.append(task)
             self.stats.pending_tasks = len(self.pending_tasks)
 
@@ -180,7 +220,7 @@ class WorkerPool(ABC, Generic[T, R]):
 
         async def _try_acquire() -> str | None:
             """Try to acquire a worker without waiting"""
-            async with self._lock:
+            async with self._ensure_lock():
                 # Try to get an available worker
                 if self.available:
                     worker_info = self.available.popleft()
@@ -215,7 +255,7 @@ class WorkerPool(ABC, Generic[T, R]):
         if len(self.all_workers) < self.config.max_workers:
             worker_id = await self._add_worker()
             if worker_id:
-                async with self._lock:
+                async with self._ensure_lock():
                     worker_info = self.all_workers[worker_id]
                     if worker_info in self.available:
                         self.available.remove(worker_info)
@@ -228,7 +268,7 @@ class WorkerPool(ABC, Generic[T, R]):
 
         # Wait for a worker to become available
         try:
-            async with self._worker_available:
+            async with self._ensure_condition():
                 await asyncio.wait_for(self._worker_available.wait_for(lambda: bool(self.available or self.hibernating or self._shutdown)), timeout=timeout)
         except asyncio.TimeoutError as e:
             raise TimeoutError(f"Failed to acquire worker within {timeout} seconds") from e
@@ -245,7 +285,7 @@ class WorkerPool(ABC, Generic[T, R]):
 
     async def release_worker(self, worker_id: str) -> None:
         """Release a worker back to the pool"""
-        async with self._lock:
+        async with self._ensure_lock():
             worker_info = self.busy.pop(worker_id, None)
             if not worker_info:
                 return
@@ -266,7 +306,7 @@ class WorkerPool(ABC, Generic[T, R]):
                     self.stats.idle_workers += 1
 
         # Notify waiters that a worker is available (outside lock to avoid deadlock)
-        async with self._worker_available:
+        async with self._ensure_condition():
             self._worker_available.notify()
 
     async def _add_worker(self) -> str | None:
@@ -283,7 +323,7 @@ class WorkerPool(ABC, Generic[T, R]):
                 last_activity=datetime.now(),
             )
 
-            async with self._lock:
+            async with self._ensure_lock():
                 self.all_workers[worker_id] = worker_info
                 self.available.append(worker_info)
                 self._store_worker_instance(worker_id, worker)
@@ -291,7 +331,7 @@ class WorkerPool(ABC, Generic[T, R]):
                 self.stats.idle_workers += 1
 
             # Notify waiters that a worker is available
-            async with self._worker_available:
+            async with self._ensure_condition():
                 self._worker_available.notify()
 
             return worker_id
@@ -301,7 +341,7 @@ class WorkerPool(ABC, Generic[T, R]):
 
     async def _remove_worker(self, worker_id: str) -> None:
         """Remove a worker from the pool"""
-        async with self._lock:
+        async with self._ensure_lock():
             worker_info = self.all_workers.pop(worker_id, None)
             if not worker_info:
                 return
@@ -370,7 +410,7 @@ class WorkerPool(ABC, Generic[T, R]):
             except TimeoutError:
                 continue
 
-            async with self._lock:
+            async with self._ensure_lock():
                 if not self.pending_tasks:
                     # No tasks left, release the worker
                     await self.release_worker(worker_id)
@@ -442,7 +482,7 @@ class WorkerPool(ABC, Generic[T, R]):
 
     async def _check_all_workers(self) -> None:
         """Check health of all workers"""
-        async with self._lock:
+        async with self._ensure_lock():
             to_remove = []
 
             for worker_id, worker_info in list(self.all_workers.items()):
@@ -486,7 +526,7 @@ class WorkerPool(ABC, Generic[T, R]):
         if not self.config.enable_hibernation:
             return
 
-        async with self._lock:
+        async with self._ensure_lock():
             to_hibernate = []
             now = datetime.now()
 
@@ -530,10 +570,12 @@ class WorkerPoolManager:
 
     def __init__(self):
         self.pools: dict[str, WorkerPool] = {}
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
 
     async def create_pool(self, config: PoolConfig) -> WorkerPool:
         """Create a new worker pool"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
         async with self._lock:
             if config.name in self.pools:
                 raise ValueError(f"Pool '{config.name}' already exists")
@@ -561,6 +603,8 @@ class WorkerPoolManager:
 
     async def remove_pool(self, name: str) -> None:
         """Remove and shutdown a pool"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
         async with self._lock:
             pool = self.pools.pop(name, None)
             if pool:
@@ -568,6 +612,8 @@ class WorkerPoolManager:
 
     async def shutdown_all(self) -> None:
         """Shutdown all pools"""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
         async with self._lock:
             for pool in self.pools.values():
                 await pool.shutdown()
