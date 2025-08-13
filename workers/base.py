@@ -273,7 +273,8 @@ class WorkerPool(ABC, Generic[T, R]):
         """Add a new worker to the pool"""
         try:
             worker = await self._create_worker(**self.config.worker_kwargs)
-            worker_id = str(uuid.uuid4())
+            # Use the worker's own ID if it has one, otherwise generate a new one
+            worker_id = getattr(worker, 'id', str(uuid.uuid4()))
 
             worker_info = WorkerInfo(
                 id=worker_id,
