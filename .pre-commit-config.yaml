@@ -51,6 +51,7 @@ repos:
       - id: check-yaml
         stages: [ pre-commit ]
       - id: check-added-large-files
+        args: ['--maxkb=100000']  # 100MB limit (git supports up to 100MB)
         stages: [ pre-commit ]
       - id: check-merge-conflict
         stages: [ pre-commit ]
