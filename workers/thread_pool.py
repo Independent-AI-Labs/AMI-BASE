@@ -43,7 +43,8 @@ class ThreadWorker:
             kwargs["worker_state"] = self.state
 
         future = self.executor.submit(func, *args, **kwargs)
-        self.thread_id = future._state  # Store thread ID for monitoring
+        # Note: thread_id would need proper thread identification if needed
+        self.thread_id = None  # Type: int | None
         return future
 
     def shutdown(self):
@@ -57,7 +58,7 @@ class ThreadWorkerPool(WorkerPool[ThreadWorker, Any]):
     def __init__(self, config: PoolConfig):
         super().__init__(config)
         self._workers: dict[str, ThreadWorker] = {}
-        self._loop = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
         # Parse init function if provided
         self._init_func = None
@@ -69,8 +70,7 @@ class ThreadWorkerPool(WorkerPool[ThreadWorker, Any]):
     async def _create_worker(self, **kwargs) -> ThreadWorker:
         """Create a new thread worker"""
         worker_id = str(len(self._workers))
-        worker = ThreadWorker(worker_id, init_func=self._init_func, **{**self.config.worker_kwargs, **kwargs})
-        return worker
+        return ThreadWorker(worker_id, init_func=self._init_func, **{**self.config.worker_kwargs, **kwargs})
 
     async def _destroy_worker(self, worker: ThreadWorker) -> None:
         """Destroy a thread worker"""
@@ -78,11 +78,12 @@ class ThreadWorkerPool(WorkerPool[ThreadWorker, Any]):
 
     async def _execute_task(self, worker: ThreadWorker, task: TaskInfo) -> Any:
         """Execute a task on a thread worker"""
-        # Get or create event loop for async execution
-        if not self._loop:
-            self._loop = asyncio.get_event_loop()
+        # Get event loop for async execution
+        self._loop = asyncio.get_event_loop()
 
         # Execute in thread and wait for result
+        if not callable(task.func):
+            raise ValueError(f"Task func must be callable, got {type(task.func)}")
         future = worker.execute(task.func, *task.args, **task.kwargs)
 
         # Convert concurrent.futures.Future to asyncio.Future
@@ -92,9 +93,9 @@ class ThreadWorkerPool(WorkerPool[ThreadWorker, Any]):
         if task.timeout:
             try:
                 result = await asyncio.wait_for(async_future, timeout=task.timeout)
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError as e:
                 future.cancel()
-                raise TimeoutError(f"Task {task.id} timed out after {task.timeout}s")
+                raise TimeoutError(f"Task {task.id} timed out after {task.timeout}s") from e
         else:
             result = await async_future
 
