@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.main import ModelMetaclass
 
 from .exceptions import ConfigurationError
 from .storage_types import ModelMetadata, StorageType
@@ -14,11 +15,11 @@ if TYPE_CHECKING:
     from .dao import BaseDAO
 
 
-class StorageModelMeta(type(BaseModel)):
+class StorageModelMeta(ModelMetaclass):
     """Metaclass for StorageModel to handle metadata"""
 
-    def __new__(mcs, name, bases, namespace, **kwargs):
-        cls = super().__new__(mcs, name, bases, namespace, **kwargs)
+    def __new__(cls, name, bases, namespace, **kwargs):
+        cls_obj = super().__new__(cls, name, bases, namespace, **kwargs)
 
         # Process Meta class if present
         if "Meta" in namespace:
@@ -34,12 +35,12 @@ class StorageModelMeta(type(BaseModel)):
                 vector_dimensions=getattr(meta, "vector_dimensions", None),
                 vector_index_type=getattr(meta, "vector_index_type", "ivfflat"),
             )
-            cls._metadata = metadata
-        elif not hasattr(cls, "_metadata"):
+            cls_obj._metadata = metadata
+        elif not hasattr(cls_obj, "_metadata"):
             # Default metadata if not inherited
-            cls._metadata = ModelMetadata(storage_type=StorageType.DOCUMENT, collection=name.lower() + "s")
+            cls_obj._metadata = ModelMetadata(storage_type=StorageType.DOCUMENT, collection=name.lower() + "s")
 
-        return cls
+        return cls_obj
 
 
 class StorageModel(BaseModel, metaclass=StorageModelMeta):
@@ -48,12 +49,12 @@ class StorageModel(BaseModel, metaclass=StorageModelMeta):
     model_config = ConfigDict(arbitrary_types_allowed=True, use_enum_values=True, validate_assignment=True)
 
     _metadata: ClassVar[ModelMetadata]
-    _dao: ClassVar[Optional["BaseDAO"]] = None
+    _dao: ClassVar["BaseDAO" | None] = None
 
     # Common fields that can be overridden
-    id: Optional[str] = Field(default_factory=lambda: str(uuid4()))
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
-    updated_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    id: str | None = Field(default_factory=lambda: str(uuid4()))
+    created_at: datetime | None = Field(default_factory=datetime.utcnow)
+    updated_at: datetime | None = Field(default_factory=datetime.utcnow)
 
     @classmethod
     def get_metadata(cls) -> ModelMetadata:
@@ -91,10 +92,10 @@ class StorageModel(BaseModel, metaclass=StorageModelMeta):
         return instance
 
     @classmethod
-    async def find_by_id(cls, id: str) -> Optional["StorageModel"]:
+    async def find_by_id(cls, item_id: str) -> Optional["StorageModel"]:
         """Find instance by ID"""
         dao = cls.get_dao()
-        return await dao.find_by_id(id)
+        return await dao.find_by_id(item_id)
 
     @classmethod
     async def find_one(cls, query: dict[str, Any]) -> Optional["StorageModel"]:
@@ -163,8 +164,7 @@ class StorageModel(BaseModel, metaclass=StorageModelMeta):
         """Create instance from storage dictionary"""
         # Handle datetime deserialization
         for field_name, field_info in cls.model_fields.items():
-            if field_name in data and field_info.annotation == datetime:
-                if isinstance(data[field_name], str):
-                    data[field_name] = datetime.fromisoformat(data[field_name])
+            if field_name in data and field_info.annotation == datetime and isinstance(data[field_name], str):
+                data[field_name] = datetime.fromisoformat(data[field_name])
 
         return cls(**data)

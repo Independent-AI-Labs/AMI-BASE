@@ -62,26 +62,31 @@ class ConnectionManager:
             pool = PostgresPool(config)
             await pool.initialize()
             return pool
-        elif config.storage_type == StorageType.DOCUMENT:
+        if config.storage_type == StorageType.DOCUMENT:
             from .implementations.mongodb_pool import MongoPool
 
             pool = MongoPool(config)
             await pool.initialize()
             return pool
-        elif config.storage_type == StorageType.CACHE:
+        if config.storage_type == StorageType.CACHE:
             from .implementations.redis_pool import RedisPool
 
             pool = RedisPool(config)
             await pool.initialize()
             return pool
-        elif config.storage_type == StorageType.VECTOR:
+        if config.storage_type == StorageType.VECTOR:
             from .implementations.vector_pool import VectorPool
 
             pool = VectorPool(config)
             await pool.initialize()
             return pool
-        else:
-            raise ConnectionError(f"Unsupported storage type: {config.storage_type}")
+        if config.storage_type == StorageType.FILE:
+            from .implementations.file_pool import FilePool
+
+            pool = FilePool(config)
+            await pool.initialize()
+            return pool
+        raise ConnectionError(f"Unsupported storage type: {config.storage_type}")
 
     @classmethod
     @asynccontextmanager

@@ -2,7 +2,7 @@
 Data Access Object base classes and factory
 """
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from .exceptions import StorageError
 from .storage_model import StorageModel
@@ -14,7 +14,7 @@ T = TypeVar("T", bound=StorageModel)
 class BaseDAO(ABC, Generic[T]):
     """Abstract base class for all DAOs"""
 
-    def __init__(self, model_cls: type[T], config: Optional[StorageConfig] = None):
+    def __init__(self, model_cls: type[T], config: StorageConfig | None = None):
         self.model_cls = model_cls
         self.metadata = model_cls.get_metadata()
         self.collection_name = self.metadata.collection
@@ -33,23 +33,23 @@ class BaseDAO(ABC, Generic[T]):
         """Create new record, return ID"""
 
     @abstractmethod
-    async def find_by_id(self, id: str) -> Optional[T]:
+    async def find_by_id(self, item_id: str) -> T | None:
         """Find record by ID"""
 
     @abstractmethod
-    async def find_one(self, query: dict[str, Any]) -> Optional[T]:
+    async def find_one(self, query: dict[str, Any]) -> T | None:
         """Find single record matching query"""
 
     @abstractmethod
-    async def find(self, query: dict[str, Any], limit: Optional[int] = None, skip: int = 0) -> list[T]:
+    async def find(self, query: dict[str, Any], limit: int | None = None, skip: int = 0) -> list[T]:
         """Find multiple records matching query"""
 
     @abstractmethod
-    async def update(self, id: str, data: dict[str, Any]) -> bool:
+    async def update(self, item_id: str, data: dict[str, Any]) -> bool:
         """Update record by ID"""
 
     @abstractmethod
-    async def delete(self, id: str) -> bool:
+    async def delete(self, item_id: str) -> bool:
         """Delete record by ID"""
 
     @abstractmethod
@@ -57,7 +57,7 @@ class BaseDAO(ABC, Generic[T]):
         """Count records matching query"""
 
     @abstractmethod
-    async def exists(self, id: str) -> bool:
+    async def exists(self, item_id: str) -> bool:
         """Check if record exists"""
 
     @abstractmethod
@@ -76,7 +76,43 @@ class BaseDAO(ABC, Generic[T]):
     async def create_indexes(self) -> None:
         """Create indexes defined in metadata"""
 
-    async def find_or_create(self, query: dict[str, Any], defaults: dict[str, Any] = None) -> tuple[T, bool]:
+    @abstractmethod
+    async def raw_read_query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """Execute raw read query and return results as list of dicts"""
+
+    @abstractmethod
+    async def raw_write_query(self, query: str, params: dict[str, Any] | None = None) -> int:
+        """Execute raw write query and return affected rows"""
+
+    @abstractmethod
+    async def list_databases(self) -> list[dict[str, Any]]:
+        """List all available databases"""
+
+    @abstractmethod
+    async def list_schemas(self, database: str | None = None) -> list[dict[str, Any]]:
+        """List all schemas in a database"""
+
+    @abstractmethod
+    async def list_tables(self, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
+        """List all tables in a database/schema"""
+
+    @abstractmethod
+    async def get_table_info(self, table: str, database: str | None = None, schema: str | None = None) -> dict[str, Any]:
+        """Get detailed information about a table"""
+
+    @abstractmethod
+    async def get_table_columns(self, table: str, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
+        """Get column information for a table"""
+
+    @abstractmethod
+    async def get_table_indexes(self, table: str, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
+        """Get index information for a table"""
+
+    @abstractmethod
+    async def test_connection(self) -> bool:
+        """Test if connection is valid"""
+
+    async def find_or_create(self, query: dict[str, Any], defaults: dict[str, Any] | None = None) -> tuple[T, bool]:
         """Find record or create if not exists"""
         instance = await self.find_one(query)
         if instance:
@@ -88,7 +124,7 @@ class BaseDAO(ABC, Generic[T]):
         new_instance.id = saved_id
         return new_instance, True
 
-    async def update_or_create(self, query: dict[str, Any], defaults: dict[str, Any] = None) -> tuple[T, bool]:
+    async def update_or_create(self, query: dict[str, Any], defaults: dict[str, Any] | None = None) -> tuple[T, bool]:
         """Update record or create if not exists"""
         instance = await self.find_one(query)
         if instance:
@@ -109,7 +145,7 @@ class DAOFactory:
     _configs: dict[StorageType, StorageConfig] = {}
 
     @classmethod
-    def register(cls, storage_type: StorageType, dao_class: type[BaseDAO], config: Optional[StorageConfig] = None):
+    def register(cls, storage_type: StorageType, dao_class: type[BaseDAO], config: StorageConfig | None = None):
         """Register a DAO class for a storage type"""
         cls._dao_classes[storage_type] = dao_class
         if config:
@@ -160,8 +196,12 @@ class DAOFactory:
                 from .implementations.graph_dao import GraphDAO
 
                 cls.register(StorageType.GRAPH, GraphDAO)
+            elif storage_type == StorageType.FILE:
+                from .implementations.file_dao import FileDAO
+
+                cls.register(StorageType.FILE, FileDAO)
         except ImportError as e:
-            raise StorageError(f"Failed to auto-register DAO for {storage_type}: {e}")
+            raise StorageError(f"Failed to auto-register DAO for {storage_type}: {e}") from e
 
     @classmethod
     def configure(cls, storage_type: StorageType, config: StorageConfig):
