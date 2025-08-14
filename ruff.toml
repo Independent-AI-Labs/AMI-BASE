@@ -44,6 +44,13 @@ max-locals = 64
 max-statements = 96
 max-branches = 16
 
+[lint.per-file-ignores]
+"tests/**/*.py" = [
+    "PLR2004",  # Magic numbers are OK in tests
+    "B007",     # Unused loop variables are OK in tests
+    "PLW0603",  # Global statements OK in tests for process isolation testing
+]
+
 [format]
 line-ending = "auto"
 quote-style = "double"

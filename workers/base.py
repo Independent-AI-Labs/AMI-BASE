@@ -549,7 +549,8 @@ class WorkerPool(ABC, Generic[T, R]):
         """Get current pool statistics"""
         self.stats.uptime_seconds = (datetime.now() - self.created_at).total_seconds()
         self.stats.last_health_check = datetime.now()
-        return self.stats
+        # Return a copy to avoid reference issues
+        return self.stats.model_copy()
 
     # Abstract methods for storing worker instances (implementation-specific)
     @abstractmethod

@@ -1,6 +1,7 @@
 """Pytest configuration and shared fixtures for workers tests."""
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,45 @@ logger.add(sys.stderr, level="INFO")
 pytest_plugins = ("pytest_asyncio",)
 
 
+# Module-level functions for process pool testing (must be pickleable)
+def fibonacci(n):
+    """Calculate fibonacci number."""
+    if n <= 1:
+        return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
+
+
+def process_data(data, multiplier=2):
+    """Process data with optional multiplier."""
+    return [x * multiplier for x in data]
+
+
+def simple_add(x, y):
+    """Simple addition function."""
+    return x + y
+
+
+def slow_task(duration):
+    """Sleep for specified duration."""
+    time.sleep(duration)
+    return f"Slept for {duration}s"
+
+
+def error_task():
+    """Task that raises an error."""
+    return 1 / 0
+
+
+def cpu_intensive(n):
+    """CPU intensive calculation."""
+    return sum(i * i for i in range(n))
+
+
+def memory_intensive(size):
+    """Create large list."""
+    return [0] * size
+
+
 @pytest_asyncio.fixture(scope="session")
 async def pool_manager():
     """Create a pool manager for the test session."""
@@ -32,8 +72,12 @@ async def pool_manager():
 @pytest_asyncio.fixture
 async def thread_pool(pool_manager):
     """Create a thread pool for testing."""
+    import uuid
+
+    # Use unique name for each test to avoid reuse
+    pool_name = f"test_thread_pool_{uuid.uuid4().hex[:8]}"
     config = PoolConfig(
-        name="test_thread_pool",
+        name=pool_name,
         pool_type=PoolType.THREAD,
         min_workers=1,
         max_workers=5,
@@ -53,8 +97,12 @@ async def thread_pool(pool_manager):
 @pytest_asyncio.fixture
 async def process_pool(pool_manager):
     """Create a process pool for testing."""
+    import uuid
+
+    # Use unique name for each test to avoid reuse
+    pool_name = f"test_process_pool_{uuid.uuid4().hex[:8]}"
     config = PoolConfig(
-        name="test_process_pool",
+        name=pool_name,
         pool_type=PoolType.PROCESS,
         min_workers=1,
         max_workers=3,
