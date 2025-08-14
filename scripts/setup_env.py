@@ -4,13 +4,13 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional  # noqa: UP035
 
 
 class EnvironmentSetup:
     """Handle development environment setup for AMI projects."""
 
-    def __init__(self, project_root: Optional[Path] = None, project_name: Optional[str] = None):
+    def __init__(self, project_root: Optional[Path] = None, project_name: Optional[str] = None):  # noqa: UP007
         """Initialize the setup.
 
         Args:
@@ -86,18 +86,32 @@ class EnvironmentSetup:
 
     def install_test_requirements(self, test_requirements_file: str = "requirements-test.txt") -> bool:
         """Install test dependencies."""
+        # First install base test requirements if this is a submodule
+        parent_base = self.project_root.parent / "base"
+        if parent_base.exists():
+            base_test_req = parent_base / test_requirements_file
+            if base_test_req.exists():
+                print(f"\n[3a/5] Installing base test dependencies from {base_test_req.relative_to(self.project_root.parent)}...")
+                try:
+                    subprocess.run(["uv", "pip", "install", "--python", str(self.venv_python), "-r", str(base_test_req)], check=True, cwd=self.project_root)
+                    print("[OK] Base test dependencies installed")
+                except subprocess.CalledProcessError as e:
+                    print(f"[ERROR] Failed to install base test dependencies: {e}")
+                    return False
+
+        # Then install project test requirements if they exist
         test_req_path = self.project_root / test_requirements_file
         if test_req_path.exists():
-            print(f"\n[3/5] Installing test dependencies from {test_requirements_file}...")
+            print(f"\n[3b/5] Installing project test dependencies from {test_requirements_file}...")
             try:
                 subprocess.run(["uv", "pip", "install", "--python", str(self.venv_python), "-r", str(test_req_path)], check=True, cwd=self.project_root)
-                print(f"[OK] Test dependencies from {test_requirements_file} installed")
+                print(f"[OK] Project test dependencies from {test_requirements_file} installed")
                 return True
             except subprocess.CalledProcessError as e:
-                print(f"[ERROR] Failed to install test dependencies: {e}")
+                print(f"[ERROR] Failed to install project test dependencies: {e}")
                 return False
         else:
-            print(f"\n[3/5] No {test_requirements_file} found - skipping")
+            print(f"\n[3b/5] No project {test_requirements_file} found - skipping")
             return True
 
     def install_package_editable(self) -> bool:
@@ -215,7 +229,7 @@ class EnvironmentSetup:
         ]
 
         for step in steps:
-            if not step():
+            if not step():  # type: ignore[operator]
                 print(f"\n[ERROR] Setup failed at step: {step.__name__}")
                 return 1
 
