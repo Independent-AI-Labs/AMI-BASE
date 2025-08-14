@@ -56,18 +56,32 @@ class EnvironmentSetup:
 
     def install_requirements(self, requirements_file: str = "requirements.txt") -> bool:
         """Install dependencies from requirements file."""
+        # First install base requirements if this is a submodule
+        parent_base = self.project_root.parent / "base"
+        if parent_base.exists():
+            base_req = parent_base / requirements_file
+            if base_req.exists():
+                print(f"\n[2a/5] Installing base dependencies from {base_req.relative_to(self.project_root.parent)}...")
+                try:
+                    subprocess.run(["uv", "pip", "install", "--python", str(self.venv_python), "-r", str(base_req)], check=True, cwd=self.project_root)
+                    print("[OK] Base dependencies installed")
+                except subprocess.CalledProcessError as e:
+                    print(f"[ERROR] Failed to install base dependencies: {e}")
+                    return False
+
+        # Then install project requirements
         req_path = self.project_root / requirements_file
         if req_path.exists():
-            print(f"\n[2/5] Installing dependencies from {requirements_file}...")
+            print(f"\n[2b/5] Installing project dependencies from {requirements_file}...")
             try:
                 subprocess.run(["uv", "pip", "install", "--python", str(self.venv_python), "-r", str(req_path)], check=True, cwd=self.project_root)
-                print(f"[OK] Dependencies from {requirements_file} installed")
+                print("[OK] Project dependencies installed")
                 return True
             except subprocess.CalledProcessError as e:
-                print(f"[ERROR] Failed to install dependencies: {e}")
+                print(f"[ERROR] Failed to install project dependencies: {e}")
                 return False
         else:
-            print(f"\n[2/5] No {requirements_file} found - skipping")
+            print(f"\n[2b/5] No {requirements_file} found - skipping")
             return True
 
     def install_test_requirements(self, test_requirements_file: str = "requirements-test.txt") -> bool:

@@ -29,8 +29,7 @@ class TestRunner:
         """Get the path to the virtual environment Python executable."""
         if sys.platform == "win32":
             return self.venv_path / "Scripts" / "python.exe"
-        else:
-            return self.venv_path / "bin" / "python"
+        return self.venv_path / "bin" / "python"
 
     def setup_environment(self):
         """Set up the virtual environment by running setup.py if needed."""
@@ -108,6 +107,16 @@ class TestRunner:
             Exit code from pytest
         """
         venv_python = self.setup_environment()
+
+        # ALWAYS reinstall requirements to ensure all dependencies are present
+        print("Ensuring all dependencies are installed...")
+        setup_py = self.project_root / "setup.py"
+        if setup_py.exists():
+            result = subprocess.run([str(venv_python), str(setup_py)], cwd=self.project_root, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                print("ERROR: Failed to install dependencies")
+                print(result.stderr)
+                sys.exit(1)
 
         # Get base module paths
         base_paths = self.ensure_base_module()
