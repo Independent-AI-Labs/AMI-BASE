@@ -14,7 +14,7 @@ class GenericSetup:
     def __init__(
         self,
         project_root: Path | None = None,
-        project_name: str = "AMI Module",
+        project_name: str = "AMI-BASE",
         base_repo_url: str = "https://github.com/Independent-AI-Labs/AMI-BASE.git",
         additional_package_info: dict[str, Any] | None = None,
     ):

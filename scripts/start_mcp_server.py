@@ -4,7 +4,15 @@
 import os
 import subprocess
 import sys
+from enum import Enum
 from pathlib import Path
+
+
+class ServerMode(Enum):
+    """Server mode enumeration."""
+
+    STDIO = "stdio"
+    WEBSOCKET = "websocket"
 
 
 class MCPServerLauncher:
@@ -42,8 +50,7 @@ class MCPServerLauncher:
         """Get the path to the virtual environment Python executable."""
         if sys.platform == "win32":
             return self.venv_path / "Scripts" / "python.exe"
-        else:
-            return self.venv_path / "bin" / "python"
+        return self.venv_path / "bin" / "python"
 
     def check_uv(self):
         """Check if uv is installed."""
@@ -117,34 +124,25 @@ class MCPServerLauncher:
 
         return self.venv_python
 
-    def get_mcp_script(self, mode="stdio"):
+    def get_mcp_script(self, mode):
         """Get the path to the MCP server script.
 
         Args:
-            mode: "stdio" or "websocket"
+            mode: ServerMode enum value
 
         Returns:
             Path to the MCP server script
         """
-        if mode == "stdio":
-            script_name = "run_stdio.py"
-        elif mode == "websocket":
-            script_name = "run_websocket.py"
-        else:
-            raise ValueError(f"Invalid mode: {mode}")
+        if not isinstance(mode, ServerMode):
+            raise TypeError(f"Mode must be ServerMode enum, got {type(mode)}")
 
-        # Try multiple locations
-        possible_paths = [
-            self.mcp_base_path / script_name,
-            self.project_root / "backend" / "mcp" / script_name,
-            self.project_root / script_name,
-        ]
+        script_name = f"run_{mode.value}.py"
+        script_path = self.mcp_base_path / script_name
 
-        for path in possible_paths:
-            if path.exists():
-                return path
+        if not script_path.exists():
+            raise FileNotFoundError(f"MCP server script '{script_name}' not found at {self.mcp_base_path}\n" f"Expected location: {script_path}")
 
-        return None
+        return script_path
 
     def build_environment(self):
         """Build environment variables for the MCP server."""
@@ -175,7 +173,7 @@ class MCPServerLauncher:
         """Run the MCP server with the virtual environment.
 
         Args:
-            mode: "stdio" for Claude Desktop or "websocket" for WebSocket server
+            mode: ServerMode enum or string ("stdio" or "websocket")
             host: Host for WebSocket mode (ignored in stdio mode)
             port: Port for WebSocket mode (ignored in stdio mode)
             custom_script: Optional custom script path to run instead of default
@@ -184,6 +182,13 @@ class MCPServerLauncher:
         Returns:
             Exit code
         """
+        # Convert string mode to enum if needed
+        if isinstance(mode, str):
+            try:
+                mode = ServerMode(mode.lower())
+            except ValueError:
+                print(f"ERROR: Invalid mode '{mode}'. Use 'stdio' or 'websocket'")
+                sys.exit(1)
         venv_python = self.setup_environment()
 
         # Get environment
@@ -198,21 +203,22 @@ class MCPServerLauncher:
             server_type = f"Custom MCP Server ({mcp_script.name})"
         else:
             # Get default script
-            mcp_script = self.get_mcp_script(mode)
-            if not mcp_script:
-                print(f"ERROR: MCP server script for mode '{mode}' not found!")
-                print(f"Searched in: {self.mcp_base_path}")
+            try:
+                mcp_script = self.get_mcp_script(mode)
+            except FileNotFoundError as e:
+                print(f"ERROR: {e}")
                 sys.exit(1)
 
             # Build command based on mode
-            if mode == "stdio":
+            if mode == ServerMode.STDIO:
                 cmd = [str(venv_python), str(mcp_script)]
                 server_type = "MCP Stdio Server (for Claude Desktop)"
-            elif mode == "websocket":
+            elif mode == ServerMode.WEBSOCKET:
                 cmd = [str(venv_python), str(mcp_script), host, str(port)]
                 server_type = f"MCP WebSocket Server at ws://{host}:{port}"
             else:
-                print(f"ERROR: Invalid mode '{mode}'. Use 'stdio' or 'websocket'")
+                # This shouldn't happen due to enum validation
+                print(f"ERROR: Unhandled mode '{mode}'")
                 sys.exit(1)
 
         # Print startup info
@@ -223,10 +229,10 @@ class MCPServerLauncher:
             result = subprocess.run(cmd, cwd=self.project_root, env=env, check=False)
             return result.returncode
         except KeyboardInterrupt:
-            print(f"\n{mode.capitalize()} server stopped by user")
+            print(f"\n{mode.value.capitalize()} server stopped by user")
             return 0
         except Exception as e:
-            print(f"\nERROR: Failed to run {mode} server: {e}")
+            print(f"\nERROR: Failed to run {mode.value} server: {e}")
             return 1
 
     def print_startup_info(self, mode, server_type, venv_python, mcp_script, env):
@@ -234,14 +240,14 @@ class MCPServerLauncher:
         print("=" * 60)
         print("MCP Server Launcher")
         print("=" * 60)
-        print(f"Mode: {mode}")
+        print(f"Mode: {mode.value}")
         print(f"Server: {server_type}")
         print(f"Python: {venv_python}")
         print(f"Script: {mcp_script}")
         print(f"Working Directory: {self.project_root}")
         print(f"Log Level: {env.get('LOG_LEVEL', 'INFO')}")
         print("=" * 60)
-        print(f"\nStarting {mode} server...")
+        print(f"\nStarting {mode.value} server...")
         print("Press Ctrl+C to stop\n")
 
 
