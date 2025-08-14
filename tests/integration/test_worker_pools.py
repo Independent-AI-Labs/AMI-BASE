@@ -417,7 +417,7 @@ class TestPoolManager:
 
         # Submit tasks to different pools
         # Using module-level function for process pool compatibility
-        from conftest import simple_add
+        from backend.workers.test_functions import simple_add
 
         task_results = []
         for i, pool in enumerate(pools):
@@ -472,7 +472,9 @@ class TestProcessPoolSpecific:
         """Test that processes are isolated."""
         # Each process should have its own memory space
 
-        # Using module-level modify_global function
+        # Using module-level modify_global function from backend.workers.test_functions
+        from backend.workers.test_functions import modify_global
+
         # Submit multiple tasks
         task_ids = []
         for _ in range(5):
@@ -497,8 +499,8 @@ class TestProcessPoolSpecific:
         # Calculate fibonacci numbers
         tasks = []
         for n in [30, 31, 32]:  # Reasonably intensive
-            # Use module-level fibonacci function from conftest
-            from conftest import fibonacci
+            # Use module-level fibonacci function from test_functions
+            from backend.workers.test_functions import fibonacci
 
             task_id = await process_pool.submit(fibonacci, n)
             tasks.append((n, task_id))
@@ -624,7 +626,7 @@ class TestStressAndPerformance:
     @pytest.mark.slow
     async def test_memory_intensive_tasks(self, pool_manager):
         """Test handling of memory-intensive tasks."""
-        from conftest import memory_intensive
+        from backend.workers.test_functions import memory_intensive
 
         config = PoolConfig(
             name="memory_pool",

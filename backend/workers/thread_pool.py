@@ -93,7 +93,7 @@ class ThreadWorkerPool(WorkerPool[ThreadWorker, Any]):
         if task.timeout:
             try:
                 result = await asyncio.wait_for(async_future, timeout=task.timeout)
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 future.cancel()
                 raise TimeoutError(f"Task {task.id} timed out after {task.timeout}s") from e
         else:

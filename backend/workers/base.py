@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from .types import PoolConfig, PoolStats, PoolType, TaskInfo, WorkerInfo, WorkerState
 
@@ -14,7 +14,7 @@ T = TypeVar("T")  # Worker type
 R = TypeVar("R")  # Result type
 
 
-class WorkerPool(ABC, Generic[T, R]):
+class WorkerPool[T, R](ABC):
     """Abstract base class for all worker pools"""
 
     def __init__(self, config: PoolConfig):
@@ -270,7 +270,7 @@ class WorkerPool(ABC, Generic[T, R]):
         try:
             async with self._ensure_condition():
                 await asyncio.wait_for(self._worker_available.wait_for(lambda: bool(self.available or self.hibernating or self._shutdown)), timeout=timeout)
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             raise TimeoutError(f"Failed to acquire worker within {timeout} seconds") from e
 
         if self._shutdown:
@@ -379,10 +379,7 @@ class WorkerPool(ABC, Generic[T, R]):
 
         # Check error rate
         error_rate_threshold = 0.5
-        if worker_info.task_count > 0 and worker_info.error_count / worker_info.task_count > error_rate_threshold:
-            return True
-
-        return False
+        return bool(worker_info.task_count > 0 and worker_info.error_count / worker_info.task_count > error_rate_threshold)
 
     async def _ensure_min_workers(self) -> None:
         """Ensure minimum number of workers are available"""
@@ -588,9 +585,10 @@ class WorkerPoolManager:
 
                 pool = ThreadWorkerPool(config)
             elif config.pool_type == PoolType.PROCESS:
-                from .process_pool import ProcessWorkerPool
+                # Use UV process pool for better subprocess management
+                from .uv_process_pool import UVProcessPool
 
-                pool = ProcessWorkerPool(config)
+                pool = UVProcessPool(config)
             else:
                 raise ValueError(f"Unsupported pool type: {config.pool_type}")
 
