@@ -19,6 +19,13 @@ _worker_state: dict[str, Any] = {}
 
 def _worker_initializer(init_func_str: str | None, env_vars: dict, *args, **kwargs):
     """Initialize a process worker"""
+    # Ensure backend module is importable
+    from pathlib import Path
+
+    base_dir = Path(__file__).parent.parent.parent
+    if str(base_dir) not in sys.path:
+        sys.path.insert(0, str(base_dir))
+
     # Set environment variables
     os.environ.update(env_vars)
 
