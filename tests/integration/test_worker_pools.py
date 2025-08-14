@@ -7,7 +7,7 @@ from datetime import datetime
 import pytest
 from loguru import logger
 
-from workers import PoolConfig, PoolType
+from backend.workers import PoolConfig, PoolType
 
 # Module-level functions for process pool testing
 test_value = 0
