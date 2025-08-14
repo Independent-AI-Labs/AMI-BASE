@@ -115,19 +115,32 @@ class ProcessWorkerPool(WorkerPool[ProcessWorker, Any]):
         # Prepare initialization parameters
         self._init_args = config.worker_args
         self._init_kwargs = config.worker_kwargs
-        self._env_vars = config.worker_env.copy()
+
+        # Copy ENTIRE current environment and merge with config
+        self._env_vars = os.environ.copy()
+        self._env_vars.update(config.worker_env)
 
         # Ensure subprocesses can import backend modules
         from pathlib import Path
 
         base_dir = Path(__file__).parent.parent.parent
-        if "PYTHONPATH" in self._env_vars:
-            self._env_vars["PYTHONPATH"] = f"{base_dir}{os.pathsep}{self._env_vars['PYTHONPATH']}"
+        current_pythonpath = self._env_vars.get("PYTHONPATH", "")
+        if current_pythonpath:
+            self._env_vars["PYTHONPATH"] = f"{base_dir}{os.pathsep}{current_pythonpath}"
         else:
             self._env_vars["PYTHONPATH"] = str(base_dir)
 
     async def initialize(self) -> None:
         """Initialize the process pool"""
+        # Set PYTHONPATH environment variable for subprocess imports
+        import os
+        from pathlib import Path
+
+        base_dir = Path(__file__).parent.parent.parent
+        current_pythonpath = os.environ.get("PYTHONPATH", "")
+        new_pythonpath = f"{base_dir}{os.pathsep}{current_pythonpath}" if current_pythonpath else str(base_dir)
+        os.environ["PYTHONPATH"] = new_pythonpath
+
         # Create the process pool executor
         # Note: initargs is the proper way to pass arguments to initializer
         self._executor = concurrent.futures.ProcessPoolExecutor(
