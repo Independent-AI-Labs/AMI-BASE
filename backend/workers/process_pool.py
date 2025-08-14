@@ -115,7 +115,16 @@ class ProcessWorkerPool(WorkerPool[ProcessWorker, Any]):
         # Prepare initialization parameters
         self._init_args = config.worker_args
         self._init_kwargs = config.worker_kwargs
-        self._env_vars = config.worker_env
+        self._env_vars = config.worker_env.copy()
+
+        # Ensure subprocesses can import backend modules
+        from pathlib import Path
+
+        base_dir = Path(__file__).parent.parent.parent
+        if "PYTHONPATH" in self._env_vars:
+            self._env_vars["PYTHONPATH"] = f"{base_dir}{os.pathsep}{self._env_vars['PYTHONPATH']}"
+        else:
+            self._env_vars["PYTHONPATH"] = str(base_dir)
 
     async def initialize(self) -> None:
         """Initialize the process pool"""
