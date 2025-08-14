@@ -7,7 +7,7 @@ class StorageError(Exception):
     """Base exception for storage-related errors"""
 
 
-class ConnectionError(StorageError):
+class StorageConnectionError(StorageError):
     """Raised when connection to storage backend fails"""
 
 
