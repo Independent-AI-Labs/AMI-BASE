@@ -1,1 +1,2 @@
 aiomultiprocess==0.9.1
+loguru==0.7.3
