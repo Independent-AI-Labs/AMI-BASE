@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import websockets
+import yaml
 from loguru import logger
 
 from .auth import AuthenticationMiddleware
@@ -31,6 +32,9 @@ class BaseMCPServer(ABC):
         self.config = config or {}
         self._websocket_server: Any = None
         self._connections: set[Any] = set()
+
+        # Response format configuration (yaml or json)
+        self.response_format = self.config.get("response_format", "yaml")
 
         # Initialize protocol handler
         self.protocol_handler = JSONRPCHandler()
@@ -335,8 +339,20 @@ class BaseMCPServer(ABC):
         # Execute the tool
         result = await self.execute_tool(tool_name, arguments)
 
-        # Format response for MCP
-        return {"content": [{"type": "text", "text": json.dumps(result, indent=2)}]}
+        # Format response based on configuration
+        if self.response_format == "yaml":
+            # Format as YAML for better readability
+            try:
+                formatted_text = yaml.dump(result, default_flow_style=False, allow_unicode=True, sort_keys=False, width=120)
+            except Exception as e:
+                logger.warning(f"Failed to format as YAML: {e}, falling back to JSON")
+                formatted_text = json.dumps(result, indent=2)
+        else:
+            # Format as JSON
+            formatted_text = json.dumps(result, indent=2)
+
+        # Return in MCP format
+        return {"content": [{"type": "text", "text": formatted_text}]}
 
     def _format_response(self, result: Any, request_id: Any) -> dict:
         """Format a JSON-RPC success response."""
