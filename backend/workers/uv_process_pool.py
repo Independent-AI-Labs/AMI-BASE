@@ -285,7 +285,7 @@ class UVProcessPool(WorkerPool[UVProcessWorker, Any]):
             # Try to execute a simple task
             result = await worker.execute("builtins:bool", (True,), {})
             return result is True
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, TypeError) as e:
             logger.warning(f"Worker health check failed: {e}")
             return False
 

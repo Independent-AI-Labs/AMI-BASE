@@ -47,7 +47,7 @@ while True:
         func = getattr(module, func_name)
         result = func(*data.get('args', []), **data.get('kwargs', {{}}))
         print(json.dumps({{'success': True, 'result': result}}))
-    except Exception as e:
+    except (RuntimeError, OSError, ValueError, TypeError) as e:
         print(json.dumps({{'success': False, 'error': str(e)}}))
 """,
             stdin=asyncio.subprocess.PIPE,
@@ -113,7 +113,7 @@ class SimpleProcessPool(WorkerPool[SimpleProcessWorker, Any]):
         try:
             result = await worker.execute("builtins:bool", True)
             return result is True
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, TypeError) as e:
             logger.warning(f"Simple process worker health check failed: {e}")
             return False
 

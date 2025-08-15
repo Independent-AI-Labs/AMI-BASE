@@ -335,7 +335,7 @@ class WorkerPool[T, R](ABC):
                 self._worker_available.notify()
 
             return worker_id
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, ZeroDivisionError, Exception) as e:
             print(f"Failed to create worker: {e}")
             return None
 
@@ -446,7 +446,7 @@ class WorkerPool[T, R](ABC):
             self.completed_tasks.append(task)
             self.stats.completed_tasks += 1
 
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, ZeroDivisionError, Exception) as e:
             task.error = e
             task.completed_at = datetime.now()
             worker_info.error_count += 1
@@ -474,7 +474,7 @@ class WorkerPool[T, R](ABC):
                 await self._check_all_workers()
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, ZeroDivisionError, Exception) as e:
                 print(f"Health check error: {e}")
 
     async def _check_all_workers(self) -> None:
@@ -504,7 +504,7 @@ class WorkerPool[T, R](ABC):
                 await self._ensure_warm_workers()
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, ZeroDivisionError, Exception) as e:
                 print(f"Warmup error: {e}")
 
     async def _hibernation_loop(self) -> None:
@@ -515,7 +515,7 @@ class WorkerPool[T, R](ABC):
                 await self._hibernate_idle_workers()
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, ZeroDivisionError, Exception) as e:
                 print(f"Hibernation error: {e}")
 
     async def _hibernate_idle_workers(self) -> None:

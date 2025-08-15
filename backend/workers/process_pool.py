@@ -162,7 +162,7 @@ class ProcessWorkerPool(WorkerPool[ProcessWorker, Any]):
             # Try to execute a simple task
             result = await worker.execute(lambda: True)
             return result is True
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, TypeError) as e:
             logger.warning(f"Process worker health check failed: {e}")
             return False
 

@@ -79,7 +79,7 @@ class MCPServerLauncher:
                 if result.returncode != 0:
                     print("setuptools not found. Running setup...")
                     needs_setup = True
-            except Exception as e:
+            except (ImportError, OSError, RuntimeError, subprocess.CalledProcessError) as e:
                 print(f"Error checking setuptools: {e}")
                 needs_setup = True
 
@@ -232,7 +232,7 @@ class MCPServerLauncher:
         except KeyboardInterrupt:
             print(f"\n{mode.value.capitalize()} server stopped by user")
             return 0
-        except Exception as e:
+        except (ImportError, OSError, RuntimeError, subprocess.CalledProcessError) as e:
             print(f"\nERROR: Failed to run {mode.value} server: {e}")
             return 1
 

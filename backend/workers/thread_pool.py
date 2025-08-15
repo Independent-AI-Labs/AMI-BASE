@@ -111,7 +111,7 @@ class ThreadWorkerPool(WorkerPool[ThreadWorker, Any]):
             future = worker.execute(lambda: True)
             result = future.result(timeout=1)
             return result is True
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, TypeError) as e:
             logger.warning(f"Thread worker health check failed: {e}")
             return False
 
