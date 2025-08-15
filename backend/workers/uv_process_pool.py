@@ -1,6 +1,7 @@
 """Process pool implementation using UV for venv management."""
 import asyncio
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -10,6 +11,8 @@ from typing import Any
 
 from .base import WorkerPool
 from .types import PoolConfig, TaskInfo
+
+logger = logging.getLogger(__name__)
 
 
 class UVProcessRunner:
@@ -282,7 +285,8 @@ class UVProcessPool(WorkerPool[UVProcessWorker, Any]):
             # Try to execute a simple task
             result = await worker.execute("builtins:bool", (True,), {})
             return result is True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Worker health check failed: {e}")
             return False
 
     async def _reset_worker(self, worker: UVProcessWorker) -> None:

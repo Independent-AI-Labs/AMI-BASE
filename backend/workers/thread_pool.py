@@ -2,12 +2,15 @@
 import asyncio
 import concurrent.futures
 import importlib
+import logging
 import threading
 from collections.abc import Callable
 from typing import Any
 
 from .base import WorkerPool
 from .types import PoolConfig, TaskInfo
+
+logger = logging.getLogger(__name__)
 
 
 class ThreadWorker:
@@ -108,7 +111,8 @@ class ThreadWorkerPool(WorkerPool[ThreadWorker, Any]):
             future = worker.execute(lambda: True)
             result = future.result(timeout=1)
             return result is True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Thread worker health check failed: {e}")
             return False
 
     async def _reset_worker(self, worker: ThreadWorker) -> None:

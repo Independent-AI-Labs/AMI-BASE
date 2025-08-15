@@ -1,4 +1,5 @@
 """Process-based worker pool implementation using aiomultiprocess."""
+import logging
 import os
 import sys
 import uuid
@@ -9,6 +10,8 @@ import aiomultiprocess
 
 from .base import WorkerPool
 from .types import PoolConfig, TaskInfo
+
+logger = logging.getLogger(__name__)
 
 # Ensure base is in path for subprocess imports
 BASE_DIR = Path(__file__).parent.parent.parent
@@ -159,7 +162,8 @@ class ProcessWorkerPool(WorkerPool[ProcessWorker, Any]):
             # Try to execute a simple task
             result = await worker.execute(lambda: True)
             return result is True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Process worker health check failed: {e}")
             return False
 
     async def _reset_worker(self, worker: ProcessWorker) -> None:

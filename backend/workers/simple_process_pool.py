@@ -1,6 +1,7 @@
 """Simple process pool that avoids pickle issues."""
 import asyncio
 import json
+import logging
 import os
 import sys
 import uuid
@@ -9,6 +10,8 @@ from typing import Any
 
 from .base import WorkerPool
 from .types import PoolConfig, TaskInfo
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleProcessWorker:
@@ -110,7 +113,8 @@ class SimpleProcessPool(WorkerPool[SimpleProcessWorker, Any]):
         try:
             result = await worker.execute("builtins:bool", True)
             return result is True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Simple process worker health check failed: {e}")
             return False
 
     async def _reset_worker(self, worker: SimpleProcessWorker) -> None:

@@ -79,7 +79,8 @@ class MCPServerLauncher:
                 if result.returncode != 0:
                     print("setuptools not found. Running setup...")
                     needs_setup = True
-            except Exception:
+            except Exception as e:
+                print(f"Error checking setuptools: {e}")
                 needs_setup = True
 
         if needs_setup:
