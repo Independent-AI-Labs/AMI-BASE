@@ -48,6 +48,13 @@ class UnifiedCRUD:
         self.sync_strategy = sync_strategy
         self.security_enabled = security_enabled and issubclass(model_cls, SecuredStorageModel)
         self._operations_log: list[StorageOperation] = []
+        self._connected_daos: set[str] = set()
+
+    async def _ensure_dao_connected(self, dao: BaseDAO, name: str) -> None:
+        """Ensure a DAO is connected before use"""
+        if name not in self._connected_daos:
+            await dao.connect()
+            self._connected_daos.add(name)
 
     async def create(self, data: dict[str, Any], context: SecurityContext | None = None, storages: list[str] | None = None) -> T:
         """
@@ -132,6 +139,9 @@ class UnifiedCRUD:
         # Identify primary storage
         primary_name = next(iter(daos.keys()))
         primary_dao = daos[primary_name]
+
+        # Ensure primary DAO is connected
+        await self._ensure_dao_connected(primary_dao, primary_name)
 
         # Create in primary
         operation = StorageOperation(storage_name=primary_name, operation="create", data=instance.to_storage_dict())
@@ -219,10 +229,28 @@ class UnifiedCRUD:
             except Exception as e:
                 logger.error(f"Rollback failed in {storage_name}: {e}")
 
+    async def get(self, item_id: str, storage_name: str | None = None) -> T | None:
+        """Get instance by ID from specified or primary storage"""
+        # Get the DAO for the storage
+        if storage_name:
+            dao = self.model_cls.get_dao(storage_name)
+        else:
+            # Use primary storage
+            all_daos = self.model_cls.get_all_daos()
+            primary_name = next(iter(all_daos.keys()))
+            dao = all_daos[primary_name]
+            storage_name = primary_name
+
+        # Ensure DAO is connected
+        await self._ensure_dao_connected(dao, storage_name)
+
+        # Get the instance
+        return await dao.find_by_id(item_id)
+
     async def update(self, instance_id: str, data: dict[str, Any], context: SecurityContext | None = None, storages: list[str] | None = None) -> T:
         """Update instance across storages"""
-        # Get instance
-        instance = await self.model_cls.find_by_id(instance_id)
+        # Get instance from primary storage
+        instance: T | None = await self.get(instance_id)
         if not instance:
             raise ValueError(f"Instance {instance_id} not found")
 

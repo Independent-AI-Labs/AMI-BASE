@@ -91,6 +91,10 @@ class StorageModel(BaseModel):
         if storage_name is None:
             storage_name = next(iter(metadata.storage_configs.keys()))
 
+        # Ensure each class has its own _daos dict
+        if not hasattr(cls, "_daos") or cls._daos is None or cls._daos is StorageModel._daos:
+            cls._daos = {}
+
         if storage_name not in cls._daos:
             from .dao import DAOFactory
 

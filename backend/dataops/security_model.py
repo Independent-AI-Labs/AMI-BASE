@@ -116,12 +116,14 @@ class SecuredStorageModel(StorageModel):
 
         # First create in Dgraph to get security key
         graph_dao = cls.get_dao("graph")
+        await graph_dao.connect()  # Ensure connected
         graph_id = await graph_dao.create(instance)
         instance.graph_id = graph_id
 
         # Then create in other storages with same security key
         for storage_name, dao in cls.get_all_daos().items():
             if storage_name != "graph":
+                await dao.connect()  # Ensure connected
                 await dao.create(instance)
 
         return instance

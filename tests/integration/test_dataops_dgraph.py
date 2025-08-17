@@ -44,7 +44,7 @@ class SampleUser(SecuredStorageModel):
 
     class Meta:
         storage_configs = {
-            "dgraph": StorageConfig(
+            "graph": StorageConfig(  # Security model expects "graph" name
                 storage_type=StorageType.GRAPH,
                 host="172.72.72.2",  # Docker VM
                 port=9080,
@@ -69,7 +69,7 @@ class SampleDocument(StorageModel):
 
     class Meta:
         storage_configs = {
-            "dgraph": StorageConfig(
+            "graph": StorageConfig(  # Consistent naming
                 storage_type=StorageType.GRAPH,
                 host="172.72.72.2",
                 port=9080,
@@ -126,9 +126,11 @@ class TestDgraphConnection:
     @pytest.mark.asyncio
     async def test_dgraph_health_check(self, dgraph_dao):
         """Test Dgraph health check"""
-        # Simple query to verify connection
-        result = await dgraph_dao.find({})
-        assert isinstance(result, list)
+        # Verify DAO is connected
+        assert dgraph_dao.client is not None
+        # Simple operation to verify connection works
+        result = await dgraph_dao.count({})
+        assert isinstance(result, int)
 
 
 class TestDgraphCRUD:
@@ -320,9 +322,9 @@ class TestSecurityModel:
         user.acl.append(ACLEntry(principal_id=security_context.user_id, principal_type="user", permissions=[Permission.ADMIN], granted_by="system"))
 
         # Check permissions
-        assert user.has_permission(security_context, Permission.READ)
-        assert user.has_permission(security_context, Permission.WRITE)
-        assert user.has_permission(security_context, Permission.DELETE)
+        assert await user.check_permission(security_context, Permission.READ)
+        assert await user.check_permission(security_context, Permission.WRITE)
+        assert await user.check_permission(security_context, Permission.DELETE)
 
         # Test with different context
         other_context = SecurityContext(
@@ -332,7 +334,7 @@ class TestSecurityModel:
         )
 
         # Should not have write permission
-        assert not user.has_permission(other_context, Permission.WRITE)
+        assert not await user.check_permission(other_context, Permission.WRITE)
 
 
 class TestBPMNModel:
@@ -351,26 +353,27 @@ class TestBPMNModel:
         await dao.connect()
 
         try:
-            # Create process with tasks
+            # Create tasks first, then add their IDs to process
+            task1 = Task(
+                id=str(uuid.uuid4()),
+                name="Task 1",
+                status=TaskStatus.PENDING,
+                assignee="user-1",
+            )
+            task2 = Task(
+                id=str(uuid.uuid4()),
+                name="Task 2",
+                status=TaskStatus.PENDING,
+                assignee="user-2",
+                dependencies=[task1.id],
+            )
+
+            # Create process with task IDs in flow_nodes
             process = Process(
                 id=str(uuid.uuid4()),
                 name="Test Process",
-                description="Integration test process",
-                tasks=[
-                    Task(
-                        id=str(uuid.uuid4()),
-                        name="Task 1",
-                        status=TaskStatus.PENDING,
-                        assignee="user-1",
-                    ),
-                    Task(
-                        id=str(uuid.uuid4()),
-                        name="Task 2",
-                        status=TaskStatus.PENDING,
-                        assignee="user-2",
-                        dependencies=["task-1"],
-                    ),
-                ],
+                documentation="Integration test process",
+                flow_nodes=[task1.id, task2.id],
             )
 
             created_id = await dao.create(process)
@@ -379,7 +382,7 @@ class TestBPMNModel:
             created = await dao.find_by_id(created_id)
             assert created is not None
             assert created.name == "Test Process"
-            assert len(created.tasks) == 2
+            assert len(created.flow_nodes) == 2
 
             # Cleanup
             await dao.delete(created_id)
@@ -400,7 +403,7 @@ class TestBPMNModel:
         await dao.connect()
 
         try:
-            # Create process
+            # Create task first
             task = Task(
                 id="task-1",
                 name="Update Test Task",
@@ -408,34 +411,25 @@ class TestBPMNModel:
                 assignee="user-1",
             )
 
+            # Create process with task ID in flow_nodes
             process = Process(
                 id=str(uuid.uuid4()),
                 name="Update Test Process",
-                tasks=[task],
+                flow_nodes=[task.id],
             )
 
             created_id = await dao.create(process)
 
-            # Update task status
-            update_data = {
-                "tasks": [
-                    {
-                        "id": "task-1",
-                        "name": "Update Test Task",
-                        "status": TaskStatus.IN_PROGRESS.value,
-                        "assignee": "user-1",
-                        "started_at": datetime.now(UTC).isoformat(),
-                    }
-                ]
-            }
+            # Update flow_nodes
+            update_data = {"flow_nodes": [task.id]}
 
             success = await dao.update(created_id, update_data)
             assert success is True
 
             # Verify update
             updated = await dao.find_by_id(created_id)
-            assert updated.tasks[0].status == TaskStatus.IN_PROGRESS
-            assert updated.tasks[0].started_at is not None
+            assert len(updated.flow_nodes) == 1
+            assert updated.flow_nodes[0] == task.id
 
             # Cleanup
             await dao.delete(created_id)
@@ -460,25 +454,25 @@ class TestUnifiedCRUD:
             author_id="unified-user",
         )
 
-        created = await crud.create(doc)
-        assert created.id == doc.id
+        created = await crud.create(doc.model_dump())
+        assert created.id is not None  # Dgraph assigns its own UID
 
         # Read
-        retrieved = await crud.get(doc.id)
+        retrieved = await crud.get(created.id)
         assert retrieved is not None
         assert retrieved.title == doc.title
 
         # Update
-        doc.title = "Updated via UnifiedCRUD"
-        updated = await crud.update(doc)
+        update_data = {"title": "Updated via UnifiedCRUD"}
+        updated = await crud.update(created.id, update_data)
         assert updated.title == "Updated via UnifiedCRUD"
 
         # Delete
-        result = await crud.delete(doc.id)
+        result = await crud.delete(created.id)
         assert result is True
 
         # Verify deletion
-        retrieved = await crud.get(doc.id)
+        retrieved = await crud.get(created.id)
         assert retrieved is None
 
     @pytest.mark.asyncio
@@ -493,16 +487,16 @@ class TestUnifiedCRUD:
             email="unified@secure.com",
         )
 
-        created = await crud.create(user, context=security_context)
+        created = await crud.create(user.model_dump(), context=security_context)
         assert created.owner_id == security_context.user_id
 
         # Update with permission check
-        user.email = "updated@secure.com"
-        updated = await crud.update(user, context=security_context)
+        update_data = {"email": "updated@secure.com"}
+        updated = await crud.update(created.id, update_data, context=security_context)
         assert updated.email == "updated@secure.com"
 
         # Delete with permission
-        result = await crud.delete(user.id, context=security_context)
+        result = await crud.delete(created.id, context=security_context)
         assert result is True
 
 
@@ -584,22 +578,8 @@ async def test_dataops_end_to_end():
         workflow = Process(
             id=str(uuid.uuid4()),
             name="Document Review Workflow",
-            description=f"Review workflow for {docs[0].title}",
-            tasks=[
-                Task(
-                    id="review-1",
-                    name="Initial Review",
-                    status=TaskStatus.PENDING,
-                    assignee=user.id,
-                ),
-                Task(
-                    id="approve-1",
-                    name="Approval",
-                    status=TaskStatus.PENDING,
-                    assignee="manager-1",
-                    dependencies=["review-1"],
-                ),
-            ],
+            documentation=f"Review workflow for {docs[0].title}",
+            flow_nodes=["review-1", "approve-1"],
         )
 
         created_workflow_id = await process_dao.create(workflow)

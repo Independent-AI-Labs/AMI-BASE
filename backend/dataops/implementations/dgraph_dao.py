@@ -55,6 +55,18 @@ class DgraphDAO(BaseDAO):
         # Build schema from model fields
         schema_parts = []
 
+        # Collect which fields need indexes
+        indexed_fields = {}
+        for index in self.metadata.indexes:
+            field_name = index.get("field")
+            index_type = index.get("type", "hash")
+            # Map index types to Dgraph tokenizers
+            if index_type == "text":
+                index_type = "fulltext"  # Use fulltext tokenizer for text indexes
+            elif index_type == "hash":
+                index_type = "exact"  # Use exact tokenizer for hash indexes
+            indexed_fields[field_name] = index_type
+
         # Add type definition
         type_def = f"type {self.collection_name} {{"
 
@@ -62,19 +74,17 @@ class DgraphDAO(BaseDAO):
             # Map Python types to Dgraph types
             dgraph_type = self._get_dgraph_type(field_info.annotation)
 
-            # Add predicate to schema
-            schema_parts.append(f"{self.collection_name}.{field_name}: {dgraph_type} .")
+            # Add predicate to schema with index if needed
+            # Note: boolean fields in Dgraph don't support indexes
+            if field_name in indexed_fields and dgraph_type != "bool":
+                schema_parts.append(f"{self.collection_name}.{field_name}: {dgraph_type} @index({indexed_fields[field_name]}) .")
+            else:
+                schema_parts.append(f"{self.collection_name}.{field_name}: {dgraph_type} .")
 
             # Add to type definition
             type_def += f"\n  {self.collection_name}.{field_name}"
 
         type_def += "\n}"
-
-        # Add indexes from metadata
-        for index in self.metadata.indexes:
-            field_name = index.get("field")
-            index_type = index.get("type", "hash")
-            schema_parts.append(f"{self.collection_name}.{field_name}: {self._get_dgraph_type(field_name)} @index({index_type}) .")
 
         # Combine schema
         schema = "\n".join(schema_parts) + "\n\n" + type_def
@@ -240,10 +250,14 @@ class DgraphDAO(BaseDAO):
             # Add UID to data
             update_data = {"uid": item_id}
 
-            # Add prefixed fields
+            # Add prefixed fields - handle complex fields like in _to_dgraph_format
             for key, value in data.items():
                 if key != "id":  # Skip ID field
-                    update_data[f"{self.collection_name}.{key}"] = value
+                    # Handle list/dict fields that need JSON encoding
+                    if isinstance(value, list | dict) and key in ["acl", "auth_rules", "tasks", "flow_nodes"]:
+                        update_data[f"{self.collection_name}.{key}"] = json.dumps(value, default=str)
+                    else:
+                        update_data[f"{self.collection_name}.{key}"] = value
 
             # Create mutation
             mutation = pydgraph.Mutation(set_json=json.dumps(update_data).encode())
@@ -502,8 +516,8 @@ class DgraphDAO(BaseDAO):
             return False
 
         try:
-            # Simple health check query
-            query = "{health: checkHealth { status }}"
+            # Simple health check query - just query schema
+            query = "{schema {}}"
             await self.raw_read_query(query)
             return True
         except Exception:
@@ -523,7 +537,7 @@ class DgraphDAO(BaseDAO):
             elif value is None:
                 # Skip None values
                 continue
-            elif isinstance(value, list | dict) and key in ["acl", "auth_rules", "tasks"]:
+            elif isinstance(value, list | dict) and key in ["acl", "auth_rules", "tasks", "flow_nodes"]:
                 # Complex objects should be stored as JSON strings for now
                 # In a full implementation, these would be separate nodes with edges
                 prefixed[f"{self.collection_name}.{key}"] = json.dumps(value, default=str)
@@ -533,6 +547,25 @@ class DgraphDAO(BaseDAO):
 
         return prefixed
 
+    def _parse_json_field(self, field_name: str, value: Any) -> Any:
+        """Parse JSON field from Dgraph format"""
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse {field_name}: {e}")
+                return []
+        elif isinstance(value, list) and len(value) == 1 and isinstance(value[0], str):
+            # Dgraph returns JSON strings wrapped in an array
+            try:
+                return json.loads(value[0])
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse wrapped {field_name}: {e}")
+                return []
+        else:
+            # Value is already parsed
+            return value
+
     def _from_dgraph_format(self, data: dict[str, Any]) -> StorageModel | None:
         """Convert Dgraph data to model instance"""
         if not data:
@@ -541,6 +574,7 @@ class DgraphDAO(BaseDAO):
         # Remove prefixes
         clean_data = {}
         prefix = f"{self.collection_name}."
+        json_fields = ["acl", "auth_rules", "tasks", "flow_nodes"]
 
         for key, value in data.items():
             if key == "uid":
@@ -548,15 +582,16 @@ class DgraphDAO(BaseDAO):
             elif key.startswith(prefix):
                 field_name = key[len(prefix) :]
                 # Parse JSON strings back to objects for complex fields
-                if field_name in ["acl", "auth_rules", "tasks"] and isinstance(value, str):
-                    try:
-                        clean_data[field_name] = json.loads(value)
-                    except json.JSONDecodeError:
-                        clean_data[field_name] = value
+                if field_name in json_fields:
+                    clean_data[field_name] = self._parse_json_field(field_name, value)
                 else:
                     clean_data[field_name] = value
             elif key not in ["dgraph.type"]:
-                clean_data[key] = value
+                # Handle fields without prefix (might come from expand(_all_))
+                if key in json_fields and isinstance(value, str):
+                    clean_data[key] = self._parse_json_field(key, value)
+                else:
+                    clean_data[key] = value
 
         return self.model_cls.from_storage_dict(clean_data)
 
