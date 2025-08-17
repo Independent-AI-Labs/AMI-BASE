@@ -24,7 +24,7 @@ def find_git_root(start_path: Path | None = None) -> Path | None:
 
         frame = inspect.stack()[1]
         module = inspect.getmodule(frame[0])
-        if module and hasattr(module, "__file__"):
+        if module and hasattr(module, "__file__"):  # noqa: SIM108
             start_path = Path(module.__file__).resolve().parent
         else:
             start_path = Path.cwd()
@@ -55,7 +55,7 @@ def find_venv_root(start_path: Path | None = None) -> Path | None:
 
         frame = inspect.stack()[1]
         module = inspect.getmodule(frame[0])
-        if module and hasattr(module, "__file__"):
+        if module and hasattr(module, "__file__"):  # noqa: SIM108
             start_path = Path(module.__file__).resolve().parent
         else:
             start_path = Path.cwd()
@@ -92,7 +92,7 @@ def find_project_root(start_path: Path | None = None) -> Path:
 
         frame = inspect.stack()[1]
         module = inspect.getmodule(frame[0])
-        if module and hasattr(module, "__file__"):
+        if module and hasattr(module, "__file__"):  # noqa: SIM108
             start_path = Path(module.__file__).resolve().parent
         else:
             start_path = Path.cwd()
@@ -113,6 +113,60 @@ def find_project_root(start_path: Path | None = None) -> Path:
     return Path(start_path).resolve()
 
 
+def ensure_venv_exists(project_root: Path) -> bool:
+    """Ensure .venv exists for a project, create if missing.
+
+    Args:
+        project_root: Root directory of the project
+
+    Returns:
+        True if venv exists or was created, False on error
+    """
+    import subprocess
+
+    venv_dir = project_root / ".venv"
+    venv_python = venv_dir / "Scripts" / "python.exe"
+
+    if venv_dir.exists() and venv_python.exists():
+        return True
+
+    print(f"ERROR: Virtual environment not found at {venv_dir}")
+    print("Creating virtual environment...")
+
+    # Import the base venv creator
+    try:
+        # Find base directory
+        base_root = find_git_root(project_root)
+        if base_root and (base_root / "base").exists():
+            base_root = base_root / "base"
+        elif (project_root / "scripts" / "start_mcp_server.py").exists():
+            # We might BE in base
+            base_root = project_root
+        else:
+            print("ERROR: Cannot find base module to create .venv")
+            return False
+
+        # Add base to path to import the creator
+        if str(base_root) not in sys.path:
+            sys.path.insert(0, str(base_root))
+
+        from scripts.start_mcp_server import _create_and_setup_venv
+
+        result = _create_and_setup_venv(project_root, venv_dir, venv_python)
+        return result == 0
+
+    except ImportError as e:
+        print(f"ERROR: Cannot import venv creator: {e}")
+        # Fallback to basic creation
+        try:
+            subprocess.run(["uv", "venv", str(venv_dir)], cwd=str(project_root), check=True)
+            print("Virtual environment created (basic)")
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            print(f"ERROR: Failed to create venv: {e}")
+            return False
+
+
 def setup_python_paths():
     """Smart Python path setup that works from anywhere.
 
@@ -129,7 +183,7 @@ def setup_python_paths():
     frame = inspect.stack()[1]
     module = inspect.getmodule(frame[0])
 
-    if module and hasattr(module, "__file__"):
+    if module and hasattr(module, "__file__"):  # noqa: SIM108
         script_path = Path(module.__file__).resolve()
     else:
         script_path = Path.cwd() / "script.py"
@@ -215,10 +269,13 @@ def get_venv_python() -> Path | None:
 
 
 # Convenience function for scripts to call at the top
-def auto_setup():
+def auto_setup(require_venv: bool = True):
     """Automatically set up paths and return key directories.
 
     Call this at the top of any script for automatic path setup.
+
+    Args:
+        require_venv: If True, ensure .venv exists (create if missing)
 
     Returns:
         Namespace with git_root, project_root, base_path, etc.
@@ -226,6 +283,15 @@ def auto_setup():
     from types import SimpleNamespace
 
     info = setup_python_paths()
+
+    # Ensure venv exists if required
+    if require_venv and info["project_root"]:
+        project_root = Path(info["project_root"])
+        if not ensure_venv_exists(project_root):
+            print(f"ERROR: Failed to ensure .venv for {project_root}")
+            sys.exit(1)
+        # Update venv_root after creation
+        info["venv_root"] = str(project_root)
 
     return SimpleNamespace(
         git_root=Path(info["git_root"]) if info["git_root"] else None,
