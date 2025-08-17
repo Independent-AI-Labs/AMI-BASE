@@ -145,8 +145,8 @@ class TestDataOpsMCPServer:
 
         assert response.success is True
         assert response.data["class"] == "SampleModel"
-        assert "graph" in response.data["storages"]
-        assert response.data["ground_truth"] == "graph"
+        assert "mongodb" in response.data["storages"]
+        assert response.data["ground_truth"] == "mongodb"
 
     @pytest.mark.asyncio
     async def test_dataops_batch_operations(self, server, context):
