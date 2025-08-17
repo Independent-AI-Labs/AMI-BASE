@@ -167,6 +167,67 @@ def ensure_venv_exists(project_root: Path) -> bool:
             return False
 
 
+def setup_module_paths(script_path: Path):
+    """Set up paths for a module script.
+
+    This is the MAIN function modules should use. It:
+    1. Finds the module root (browser/, files/, etc.)
+    2. Finds the main orchestrator root
+    3. Ensures .venv exists for the module
+    4. Adds paths in correct order: module, main, base
+
+    Args:
+        script_path: Path to the calling script (__file__)
+
+    Returns:
+        Tuple of (module_root, base_path)
+    """
+    script_path = Path(script_path).resolve()
+
+    # Find module root - look for backend/ and requirements.txt
+    module_root = script_path.parent
+    while module_root != module_root.parent:
+        if (module_root / "backend").exists() and (module_root / "requirements.txt").exists():
+            break
+        module_root = module_root.parent
+
+    if module_root == module_root.parent:
+        raise RuntimeError(f"Could not find module root for {script_path}")
+
+    # Find main orchestrator root (contains base/)
+    main_root = module_root
+    while main_root != main_root.parent:
+        if (main_root / "base").exists() and (main_root / ".git").exists():
+            break
+        main_root = main_root.parent
+
+    if main_root == main_root.parent:
+        raise RuntimeError(f"Could not find main root with base/ for {script_path}")
+
+    base_path = main_root / "base"
+
+    # Ensure module .venv exists
+    if not ensure_venv_exists(module_root):
+        raise RuntimeError(f"Failed to ensure .venv for {module_root}")
+
+    # Clear any existing paths to avoid conflicts
+    for p in [str(module_root), str(main_root), str(base_path)]:
+        while p in sys.path:
+            sys.path.remove(p)
+
+    # Add paths in correct order
+    # 1. Module root MUST be first (for module's own imports)
+    sys.path.insert(0, str(module_root))
+
+    # 2. Main root (for imports like "from base.backend...")
+    sys.path.insert(1, str(main_root))
+
+    # 3. Base path (for direct base imports like "from backend.utils...")
+    sys.path.insert(2, str(base_path))
+
+    return module_root, base_path
+
+
 def setup_python_paths():
     """Smart Python path setup that works from anywhere.
 
