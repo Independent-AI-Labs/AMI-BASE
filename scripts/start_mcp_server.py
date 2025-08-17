@@ -10,6 +10,88 @@ import sys
 from pathlib import Path
 
 
+def _create_and_setup_venv(project_root: Path, venv_dir: Path, venv_python: Path) -> int:
+    """Create virtual environment and install all dependencies.
+
+    Args:
+        project_root: Root directory of the module
+        venv_dir: Path to .venv directory
+        venv_python: Path to python.exe in venv
+
+    Returns:
+        0 on success, 1 on error
+    """
+    print(f"ERROR: Virtual environment not found at {venv_dir}")
+    print("Creating virtual environment...")
+    try:
+        subprocess.run(["uv", "venv", str(venv_dir)], cwd=str(project_root), check=True)
+        print("Virtual environment created")
+
+        # ALWAYS install base requirements FIRST - modules depend on base!
+        base_root = Path(__file__).parent.parent  # base directory
+        base_requirements = base_root / "requirements.txt"
+        if base_requirements.exists():
+            print(f"Installing BASE dependencies from {base_requirements}...")
+            subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", str(base_requirements)], cwd=str(project_root), check=True)
+            print("Base dependencies installed")
+        else:
+            print(f"ERROR: Base requirements.txt not found at {base_requirements}")
+            return 1
+
+        # Then install module's own requirements
+        requirements_file = project_root / "requirements.txt"
+        if requirements_file.exists():
+            print(f"Installing MODULE dependencies from {requirements_file}...")
+            subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", "requirements.txt"], cwd=str(project_root), check=True)
+            print("Module dependencies installed")
+        else:
+            print(f"WARNING: No requirements.txt found at {requirements_file}")
+
+        # Install base test requirements
+        base_test_requirements = base_root / "requirements-test.txt"
+        if base_test_requirements.exists():
+            print(f"Installing BASE test dependencies from {base_test_requirements}...")
+            subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", str(base_test_requirements)], cwd=str(project_root), check=True)
+            print("Base test dependencies installed")
+
+        # Also install module's test dependencies if they exist
+        test_requirements = project_root / "requirements-test.txt"
+        if test_requirements.exists():
+            print(f"Installing MODULE test dependencies from {test_requirements}...")
+            subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", "requirements-test.txt"], cwd=str(project_root), check=True)
+            print("Module test dependencies installed")
+
+        # Install essential test packages
+        print("Installing essential packages for pre-commit...")
+        subprocess.run(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                str(venv_python),
+                "pre-commit",
+                "pytest",
+                "pytest-asyncio",
+                "pytest-timeout",
+                "pytest-mock",
+                "pytest-cov",
+                "websockets",
+            ],
+            cwd=str(project_root),
+            check=True,
+        )
+        print("Essential packages installed")
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: Failed to create virtual environment: {e}")
+        return 1
+    except FileNotFoundError:
+        print("ERROR: 'uv' command not found. Please install uv first.")
+        return 1
+
+
 def main(project_root: Path, mcp_base_path: str, project_name: str) -> int:  # noqa: PLR0911
     """Run MCP server for any module with automatic .venv creation.
 
@@ -33,57 +115,9 @@ def main(project_root: Path, mcp_base_path: str, project_name: str) -> int:  # n
     venv_python = venv_dir / "Scripts" / "python.exe"
 
     if not venv_dir.exists():
-        print(f"ERROR: Virtual environment not found at {venv_dir}")
-        print("Creating virtual environment...")
-        try:
-            subprocess.run(["uv", "venv", str(venv_dir)], cwd=str(project_root), check=True)
-            print("Virtual environment created")
-
-            # Install dependencies if requirements.txt exists
-            requirements_file = project_root / "requirements.txt"
-            if requirements_file.exists():
-                print(f"Installing dependencies from {requirements_file}...")
-                # MUST use the venv we just created with --python flag!
-                subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", "requirements.txt"], cwd=str(project_root), check=True)
-                print("Dependencies installed")
-            else:
-                print(f"WARNING: No requirements.txt found at {requirements_file}")
-
-            # Also install test dependencies if they exist
-            test_requirements = project_root / "requirements-test.txt"
-            if test_requirements.exists():
-                print(f"Installing test dependencies from {test_requirements}...")
-                subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", "requirements-test.txt"], cwd=str(project_root), check=True)
-                print("Test dependencies installed")
-
-            # Install essential test packages if requirements-test.txt doesn't exist
-            # These are needed for pre-commit hooks to work
-            print("Installing essential packages for pre-commit...")
-            subprocess.run(
-                [
-                    "uv",
-                    "pip",
-                    "install",
-                    "--python",
-                    str(venv_python),
-                    "pre-commit",
-                    "pytest",
-                    "pytest-asyncio",
-                    "pytest-timeout",
-                    "pytest-mock",
-                    "pytest-cov",
-                    "websockets",
-                ],
-                cwd=str(project_root),
-                check=True,
-            )
-            print("Essential packages installed")
-        except subprocess.CalledProcessError as e:
-            print(f"ERROR: Failed to create virtual environment: {e}")
-            return 1
-        except FileNotFoundError:
-            print("ERROR: 'uv' command not found. Please install uv first.")
-            return 1
+        result = _create_and_setup_venv(project_root, venv_dir, venv_python)
+        if result != 0:
+            return result
 
     if not venv_python.exists():
         print(f"ERROR: Python executable not found at {venv_python}")
@@ -103,8 +137,8 @@ def main(project_root: Path, mcp_base_path: str, project_name: str) -> int:  # n
     print("=" * 60)
 
     try:
-        result = subprocess.run([python_exe, str(run_stdio_path)], cwd=str(project_root), check=False)
-        return result.returncode
+        proc = subprocess.run([python_exe, str(run_stdio_path)], cwd=str(project_root), check=False)
+        return proc.returncode
     except KeyboardInterrupt:
         print(f"\n{project_name} stopped by user")
         return 0
