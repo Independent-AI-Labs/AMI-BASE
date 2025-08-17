@@ -27,9 +27,11 @@ class DataOpsMCPServer(BaseMCPServer):
 
     def __init__(self, config: dict[str, Any] | None = None):
         """Initialize DataOps MCP server"""
-        super().__init__(config)
+        # Initialize our attributes BEFORE calling super().__init__
+        # because super().__init__ calls register_tools() which needs these
         self._model_registry: dict[str, type[StorageModel]] = {}
         self._crud_registry: dict[str, UnifiedCRUD] = {}
+        super().__init__(config)
 
     def register_model(self, model_cls: type[StorageModel], name: str | None = None):
         """Register a model with the server"""
