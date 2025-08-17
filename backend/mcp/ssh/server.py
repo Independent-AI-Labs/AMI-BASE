@@ -31,21 +31,18 @@ class SSHMCPServer(BaseMCPServer):
             config_file: Path to YAML configuration file
         """
         # Load SSH servers from config file if provided
-        self.ssh_servers = {}
+        self.ssh_servers: dict[str, SSHConfig] = {}
         self.options = {}
-        
+
         if config_file:
             self._load_config_file(config_file)
         elif config and "servers" in config:
             self._load_servers_from_config(config["servers"])
             self.options = config.get("options", {})
-        
+
         # Check environment variable for privileged tools
-        enable_privileged = (
-            os.environ.get("SSH_MCP_ENABLE_PRIVILEGED", "false").lower() == "true"
-            or self.options.get("enable_privileged", False)
-        )
-        
+        enable_privileged = os.environ.get("SSH_MCP_ENABLE_PRIVILEGED", "false").lower() == "true" or self.options.get("enable_privileged", False)
+
         # Initialize tool registry and executor
         self.registry = ToolRegistry()
         register_all_tools(self.registry, enable_privileged=enable_privileged)
@@ -54,10 +51,7 @@ class SSHMCPServer(BaseMCPServer):
         # Initialize base with config
         super().__init__(config)
 
-        logger.info(
-            f"SSH MCP server initialized with {len(self.tools)} tools "
-            f"and {len(self.ssh_servers)} servers"
-        )
+        logger.info(f"SSH MCP server initialized with {len(self.tools)} tools " f"and {len(self.ssh_servers)} servers")
         if enable_privileged:
             logger.warning("Privileged tools are ENABLED - runtime server management is allowed")
 
@@ -71,20 +65,20 @@ class SSHMCPServer(BaseMCPServer):
                 if not path.exists():
                     logger.warning(f"Configuration file not found: {config_file}")
                     return
-            
-            with open(path) as f:
+
+            with path.open() as f:
                 data = yaml.safe_load(f)
-                
+
             if data and "servers" in data:
                 self._load_servers_from_config(data["servers"])
-            
+
             if data and "options" in data:
                 self.options = data["options"]
-                
+
             logger.info(f"Loaded {len(self.ssh_servers)} servers from {path}")
         except Exception as e:
             logger.error(f"Failed to load configuration file {config_file}: {e}")
-    
+
     def _load_servers_from_config(self, servers_config: dict) -> None:
         """Load server configurations from dictionary."""
         for server_name, server_data in servers_config.items():
@@ -92,7 +86,7 @@ class SSHMCPServer(BaseMCPServer):
                 # Ensure name is set
                 if "name" not in server_data:
                     server_data["name"] = server_name
-                    
+
                 config = SSHConfig(**server_data)
                 self.ssh_servers[config.name] = config
                 logger.debug(f"Loaded SSH server: {config.name} ({config.host}:{config.port})")
@@ -124,7 +118,7 @@ class SSHMCPServer(BaseMCPServer):
         """
         # Execute using the tool executor
         return await self.executor.execute(tool_name, arguments)
-    
+
     def cleanup(self):
         """Clean up resources on shutdown."""
         if hasattr(self, "executor"):

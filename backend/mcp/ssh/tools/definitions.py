@@ -96,14 +96,14 @@ PRIVILEGED_TOOLS = [
 
 def register_all_tools(registry: ToolRegistry, enable_privileged: bool = False) -> None:
     """Register all SSH tools with the registry.
-    
+
     Args:
         registry: Tool registry to register tools with
         enable_privileged: Whether to enable privileged runtime management tools
     """
     for tool in SSH_TOOLS:
         registry.register(tool)
-    
+
     if enable_privileged:
         for tool in PRIVILEGED_TOOLS:
             registry.register(tool)

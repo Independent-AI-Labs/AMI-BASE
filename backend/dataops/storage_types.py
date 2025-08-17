@@ -1,17 +1,12 @@
 """
 Storage type definitions and configurations
 """
-import sys
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-# Add base module to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from base.backend.config.network import IPConfig  # noqa: E402
+from ..config.network import IPConfig
 
 
 class StorageType(Enum):

@@ -2,7 +2,7 @@
 Data Access Object base classes and factory
 """
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 from .exceptions import StorageError
 from .storage_model import StorageModel
@@ -11,7 +11,7 @@ from .storage_types import StorageConfig, StorageType
 T = TypeVar("T", bound=StorageModel)
 
 
-class BaseDAO(ABC, Generic[T]):
+class BaseDAO[T: StorageModel](ABC):
     """Abstract base class for all DAOs"""
 
     def __init__(self, model_cls: type[T], config: StorageConfig | None = None):
@@ -197,9 +197,9 @@ class DAOFactory:
 
                 cls.register(StorageType.TIMESERIES, TimeseriesDAO)
             elif storage_type == StorageType.GRAPH:
-                from .implementations.graph_dao import GraphDAO
+                from .implementations.dgraph_dao import DgraphDAO
 
-                cls.register(StorageType.GRAPH, GraphDAO)
+                cls.register(StorageType.GRAPH, DgraphDAO)
             elif storage_type == StorageType.FILE:
                 from .implementations.file_dao import FileDAO
 
@@ -211,3 +211,17 @@ class DAOFactory:
     def configure(cls, storage_type: StorageType, config: StorageConfig):
         """Configure storage backend"""
         cls._configs[storage_type] = config
+
+
+# Convenience function for getting DAO
+def get_dao(model_cls: type[StorageModel], storage_config: StorageConfig) -> BaseDAO:
+    """Get a DAO instance for the given model and storage configuration.
+
+    Args:
+        model_cls: The model class
+        storage_config: Storage configuration
+
+    Returns:
+        DAO instance for the model
+    """
+    return DAOFactory.create(model_cls, storage_config)

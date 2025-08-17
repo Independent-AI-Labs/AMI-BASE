@@ -3,11 +3,10 @@ Base StorageModel class that all models inherit from
 """
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Optional
-from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
-from pydantic.main import ModelMetaclass
 
+from ..utils.uuid_utils import uuid7
 from .exceptions import ConfigurationError
 from .storage_types import ModelMetadata, StorageConfig, StorageType
 
@@ -15,15 +14,26 @@ if TYPE_CHECKING:
     from .dao import BaseDAO
 
 
-class StorageModelMeta(ModelMetaclass):
-    """Metaclass for StorageModel to handle metadata"""
+class StorageModel(BaseModel):
+    """Base model for all storage-aware models"""
 
-    def __new__(cls, name, bases, namespace, **kwargs):
-        cls_obj = super().__new__(cls, name, bases, namespace, **kwargs)
+    model_config = ConfigDict(arbitrary_types_allowed=True, use_enum_values=True, validate_assignment=True)
+
+    _metadata: ClassVar[ModelMetadata]
+    _daos: ClassVar[dict[str, "BaseDAO"]] = {}
+
+    # Common fields that can be overridden
+    id: str | None = Field(default_factory=uuid7)
+    created_at: datetime | None = Field(default_factory=datetime.utcnow)
+    updated_at: datetime | None = Field(default_factory=datetime.utcnow)
+
+    def __init_subclass__(cls, **kwargs):
+        """Initialize metadata when subclass is created"""
+        super().__init_subclass__(**kwargs)
 
         # Process Meta class if present
-        if "Meta" in namespace:
-            meta = namespace["Meta"]
+        if hasattr(cls, "Meta"):
+            meta = cls.Meta
 
             # Handle both old single storage_type and new storage_configs
             if hasattr(meta, "storage_configs"):
@@ -38,31 +48,15 @@ class StorageModelMeta(ModelMetaclass):
 
             metadata = ModelMetadata(
                 storage_configs=storage_configs,
-                path=getattr(meta, "path", name.lower() + "s"),
+                path=getattr(meta, "path", cls.__name__.lower() + "s"),
                 uid=getattr(meta, "uid", "id"),
                 indexes=getattr(meta, "indexes", []),
                 options=getattr(meta, "options", {}),
             )
-            cls_obj._metadata = metadata
-        elif not hasattr(cls_obj, "_metadata"):
+            cls._metadata = metadata
+        elif not hasattr(cls, "_metadata"):
             # Default metadata if not inherited
-            cls_obj._metadata = ModelMetadata(storage_configs={"primary": StorageConfig(storage_type=StorageType.DOCUMENT)}, path=name.lower() + "s")
-
-        return cls_obj
-
-
-class StorageModel(BaseModel, metaclass=StorageModelMeta):
-    """Base model for all storage-aware models"""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True, use_enum_values=True, validate_assignment=True)
-
-    _metadata: ClassVar[ModelMetadata]
-    _daos: ClassVar[dict[str, "BaseDAO"]] = {}
-
-    # Common fields that can be overridden
-    id: str | None = Field(default_factory=lambda: str(uuid4()))
-    created_at: datetime | None = Field(default_factory=datetime.utcnow)
-    updated_at: datetime | None = Field(default_factory=datetime.utcnow)
+            cls._metadata = ModelMetadata(storage_configs={"primary": StorageConfig(storage_type=StorageType.DOCUMENT)}, path=cls.__name__.lower() + "s")
 
     @classmethod
     def get_metadata(cls) -> ModelMetadata:
