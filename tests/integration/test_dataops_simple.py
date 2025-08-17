@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from backend.dataops.storage_model import StorageModel
-from backend.dataops.storage_types import StorageConfig, StorageType
+from backend.dataops.storage_model import StorageModel  # noqa: E402
+from backend.dataops.storage_types import StorageConfig, StorageType  # noqa: E402
 
 
 class SimpleModel(StorageModel):
@@ -50,7 +50,7 @@ async def test_simple_storage():
     print("\n[OK] Simple model test passed!")
 
     # Now let's test with BPMN model
-    from backend.dataops.bpmn_model import Task, TaskStatus
+    from services.dataops.bpmn_model import Task, TaskStatus
 
     task = Task(id="task-1", name="Test Task", state=TaskStatus.PENDING, assignee="user-1")
 
@@ -61,7 +61,7 @@ async def test_simple_storage():
     print("\n[OK] BPMN model test passed!")
 
     # Test security model
-    from backend.dataops.security_model import SecurityContext
+    from services.dataops.security_model import SecurityContext
 
     context = SecurityContext(user_id="test-user", roles=["admin"], groups=["developers"])
 

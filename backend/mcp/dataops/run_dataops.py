@@ -17,20 +17,20 @@ while current != current.parent:
     current = current.parent
 
 # Now we can import the proper path finder
-from backend.utils.path_finder import setup_base_import  # noqa: E402
+from services.utils.path_finder import setup_base_import  # noqa: E402
 
 setup_base_import(Path(__file__))
 
-from backend.mcp.run_server import setup_environment  # noqa: E402
+from services.mcp.run_server import setup_environment  # noqa: E402
 
 if __name__ == "__main__":
     # Setup environment first (will re-exec if needed)
     module_root, python = setup_environment(Path(__file__))
 
     # NOW import after environment is set up
-    from backend.dataops.bpmn_model import Event, Gateway, Process, Task  # noqa: E402
-    from backend.mcp.dataops.server import DataOpsMCPServer  # noqa: E402
-    from backend.mcp.run_server import run_server  # noqa: E402
+    from services.dataops.bpmn_model import Event, Gateway, Process, Task  # noqa: E402
+    from services.mcp.dataops.server import DataOpsMCPServer  # noqa: E402
+    from services.mcp.run_server import run_server  # noqa: E402
 
     # Parse transport from args
     transport = "stdio"

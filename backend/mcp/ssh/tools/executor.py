@@ -5,8 +5,7 @@ from typing import Any
 
 import paramiko  # type: ignore[import-untyped]
 from loguru import logger
-
-from backend.config.network import SSHConfig
+from services.config.network import SSHConfig
 
 
 class SSHConnection:

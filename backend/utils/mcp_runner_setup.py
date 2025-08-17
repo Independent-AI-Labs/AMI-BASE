@@ -83,24 +83,12 @@ def ensure_venv_exists(module_root: Path) -> Path:
         # Create venv with uv
         subprocess.run(["uv", "venv", str(venv_dir)], cwd=str(module_root), check=True, capture_output=True, text=True)
 
-        # Install requirements
-        requirements_file = module_root / "requirements.txt"
-        if requirements_file.exists():
-            print(f"Installing requirements from {requirements_file}...")
-            subprocess.run(
-                ["uv", "pip", "install", "--python", str(venv_python), "-r", str(requirements_file)],
-                cwd=str(module_root),
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-
-        # If this is NOT base, also install base requirements
+        # If this is NOT base, install base requirements FIRST
         base_module = find_base_module(module_root)
         if base_module != module_root:
             base_requirements = base_module / "requirements.txt"
             if base_requirements.exists():
-                print(f"Installing base requirements from {base_requirements}...")
+                print(f"Installing base requirements FIRST from {base_requirements}...")
                 subprocess.run(
                     ["uv", "pip", "install", "--python", str(venv_python), "-r", str(base_requirements)],
                     cwd=str(module_root),
@@ -108,6 +96,18 @@ def ensure_venv_exists(module_root: Path) -> Path:
                     capture_output=True,
                     text=True,
                 )
+
+        # Then install module requirements
+        requirements_file = module_root / "requirements.txt"
+        if requirements_file.exists():
+            print(f"Installing module requirements from {requirements_file}...")
+            subprocess.run(
+                ["uv", "pip", "install", "--python", str(venv_python), "-r", str(requirements_file)],
+                cwd=str(module_root),
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
         # Install pre-commit for all modules (needed for git hooks)
         print("Installing pre-commit for git hooks...")

@@ -26,7 +26,7 @@ def bootstrap():
                 sys.path.insert(0, str(base_path))
 
             # Now we can import the real path setup
-            from backend.utils.path_setup import setup_paths
+            from services.utils.path_setup import setup_paths
 
             return setup_paths()
         current = current.parent

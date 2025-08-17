@@ -5,11 +5,10 @@ import json
 
 import pytest
 import yaml
-
-from backend.dataops.enhanced_decorators import sensitive_field
-from backend.dataops.security_model import SecuredStorageModel, SecurityContext
-from backend.dataops.storage_model import StorageModel
-from backend.mcp.dataops.server import DataOpsMCPServer
+from services.dataops.enhanced_decorators import sensitive_field
+from services.dataops.security_model import SecuredStorageModel, SecurityContext
+from services.dataops.storage_model import StorageModel
+from services.mcp.dataops.server import DataOpsMCPServer
 
 
 class SampleModel(StorageModel):

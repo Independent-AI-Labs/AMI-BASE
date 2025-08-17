@@ -17,20 +17,23 @@ A unified CRUD system that seamlessly manages data across multiple storage backe
 - **UUID v7**: Time-ordered identifiers for natural sorting and tracing
 
 **Example:**
+
 ```python
-from backend.dataops.unified_crud import UnifiedCRUD, SyncStrategy
-from backend.dataops.security_model import SecuredStorageModel, SecurityContext
+from services.dataops.unified_crud import UnifiedCRUD, SyncStrategy
+from services.dataops.security_model import SecuredStorageModel, SecurityContext
+
 
 # Create a secured model with automatic Dgraph + Redis sync
 class User(SecuredStorageModel):
     username: str
     email: str
-    
+
     class Meta:
         storage_configs = {
             "graph": StorageConfig(storage_type=StorageType.GRAPH),
             "cache": StorageConfig(storage_type=StorageType.CACHE)
         }
+
 
 # Use unified CRUD with security
 crud = UnifiedCRUD(User, sync_strategy=SyncStrategy.PRIMARY_FIRST)
@@ -152,9 +155,9 @@ python -m pytest --cov=backend --cov-report=html
 ### DataOps with Dgraph
 
 ```python
-from backend.dataops.bpmn_model import Process, Task
-from backend.dataops.dao import get_dao
-from backend.dataops.storage_types import StorageConfig, StorageType
+from services.dataops.bpmn_model import Process, Task
+from services.dataops.dao import get_dao
+from services.dataops.storage_types import StorageConfig, StorageType
 
 # Configure Dgraph connection
 config = StorageConfig(
@@ -181,7 +184,7 @@ process_id = await dao.create(process)
 ### MCP Server Usage
 
 ```python
-from backend.mcp.dataops.server import DataOpsMCPServer
+from services.mcp.dataops.server import DataOpsMCPServer
 
 # Initialize server
 server = DataOpsMCPServer()
@@ -204,7 +207,7 @@ result = await server.handle_tool_call(
 ### Worker Pool Management
 
 ```python
-from backend.utils.worker_pools import PoolManager, PoolConfig
+from services.utils.worker_pools import PoolManager, PoolConfig
 
 # Configure pool
 config = PoolConfig(

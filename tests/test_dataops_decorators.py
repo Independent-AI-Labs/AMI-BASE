@@ -5,8 +5,7 @@ import asyncio
 from datetime import datetime
 
 import pytest
-
-from backend.dataops.enhanced_decorators import (
+from services.dataops.enhanced_decorators import (
     EventRecord,
     cached_result,
     multi_storage,
@@ -14,7 +13,7 @@ from backend.dataops.enhanced_decorators import (
     sanitize_for_mcp,
     sensitive_field,
 )
-from backend.dataops.security_model import SecuredStorageModel, SecurityContext
+from services.dataops.security_model import SecuredStorageModel, SecurityContext
 
 
 # Test models
@@ -163,7 +162,7 @@ class TestDecorators:
 
     def test_event_record_model(self):
         """Test EventRecord model structure"""
-        from backend.utils.uuid_utils import is_uuid7
+        from services.utils.uuid_utils import is_uuid7
 
         event = EventRecord(event_type="TestEvent", function_name="test_func", input={"arg1": "value1", "arg2": 42}, output={"result": "success"}, success=True)
 

@@ -46,15 +46,15 @@ def create_venv(module_root: Path, base_path: Path) -> Path:
         print(f"Creating .venv at {venv_dir}...")
         subprocess.run(["uv", "venv", str(venv_dir)], cwd=str(module_root), check=True)
 
-        # Install requirements
+        # Install base requirements FIRST if not base
+        if base_path != module_root and (base_path / "requirements.txt").exists():
+            print("Installing base requirements FIRST...")
+            subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", str(base_path / "requirements.txt")], cwd=str(module_root), check=True)
+
+        # Then install module requirements
         if (module_root / "requirements.txt").exists():
             print("Installing module requirements...")
             subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", "requirements.txt"], cwd=str(module_root), check=True)
-
-        # Install base requirements if not base
-        if base_path != module_root and (base_path / "requirements.txt").exists():
-            print("Installing base requirements...")
-            subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", str(base_path / "requirements.txt")], cwd=str(module_root), check=True)
 
         # Install pre-commit
         print("Installing pre-commit...")
@@ -62,8 +62,11 @@ def create_venv(module_root: Path, base_path: Path) -> Path:
 
         # ACTUALLY INSTALL THE FUCKING GIT HOOKS
         print("Installing git hooks...")
-        subprocess.run([str(venv_python), "-m", "pre_commit", "install"], cwd=str(module_root), check=True)
-        subprocess.run([str(venv_python), "-m", "pre_commit", "install", "--hook-type", "pre-push"], cwd=str(module_root), check=True)
+        try:
+            subprocess.run([str(venv_python), "-m", "pre_commit", "install"], cwd=str(module_root), check=True)
+            subprocess.run([str(venv_python), "-m", "pre_commit", "install", "--hook-type", "pre-push"], cwd=str(module_root), check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Could not install git hooks: {e}")
 
     return venv_python
 

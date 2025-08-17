@@ -10,8 +10,7 @@ from typing import Any
 
 import yaml
 from loguru import logger
-
-from backend.dataops.bpmn_model import (
+from services.dataops.bpmn_model import (
     Event,
     Gateway,
     Process,
@@ -19,10 +18,10 @@ from backend.dataops.bpmn_model import (
 )
 
 # Import from parent modules
-from backend.dataops.security_model import SecuredStorageModel
-from backend.dataops.storage_model import StorageModel
-from backend.dataops.unified_crud import UnifiedCRUD
-from backend.mcp.mcp_server import BaseMCPServer
+from services.dataops.security_model import SecuredStorageModel
+from services.dataops.storage_model import StorageModel
+from services.dataops.unified_crud import UnifiedCRUD
+from services.mcp.mcp_server import BaseMCPServer
 
 
 @dataclass

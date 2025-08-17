@@ -3,7 +3,7 @@ Tests for BPMN 2.0 data model
 """
 from datetime import datetime
 
-from backend.dataops.bpmn_model import (
+from services.dataops.bpmn_model import (
     BPMNElement,
     Event,
     EventDefinition,
@@ -23,7 +23,7 @@ from backend.dataops.bpmn_model import (
     Task,
     TaskType,
 )
-from backend.utils.uuid_utils import is_uuid7
+from services.utils.uuid_utils import is_uuid7
 
 
 class TestBPMNEnums:

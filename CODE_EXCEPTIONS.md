@@ -75,10 +75,12 @@ if self._lock._loop != asyncio.get_running_loop():  # type: ignore[attr-defined]
 Must modify `sys.path` BEFORE importing local modules to ensure correct module resolution.
 
 ### Pattern:
+
 ```python
 import sys
+
 sys.path.insert(0, project_root)  # Must come first
-from backend.mcp import MCPServer  # Now safe to import
+from services.mcp import MCPServer  # Now safe to import
 ```
 
 ## 5. Complex Methods

@@ -15,18 +15,18 @@ import pytest
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from backend.dataops.bpmn_model import Process, Task, TaskStatus  # noqa: E402
-from backend.dataops.dao import get_dao  # noqa: E402
-from backend.dataops.implementations.dgraph_dao import DgraphDAO  # noqa: E402
-from backend.dataops.security_model import (  # noqa: E402
+from services.dataops.bpmn_model import Process, Task, TaskStatus  # noqa: E402
+from services.dataops.dao import get_dao  # noqa: E402
+from services.dataops.implementations.dgraph_dao import DgraphDAO  # noqa: E402
+from services.dataops.security_model import (  # noqa: E402
     ACLEntry,
     Permission,
     SecuredStorageModel,
     SecurityContext,
 )
-from backend.dataops.storage_model import StorageModel  # noqa: E402
-from backend.dataops.storage_types import StorageConfig, StorageType  # noqa: E402
-from backend.dataops.unified_crud import SyncStrategy, UnifiedCRUD  # noqa: E402
+from services.dataops.storage_model import StorageModel  # noqa: E402
+from services.dataops.storage_types import StorageConfig, StorageType  # noqa: E402
+from services.dataops.unified_crud import SyncStrategy, UnifiedCRUD  # noqa: E402
 
 
 # Test Models
