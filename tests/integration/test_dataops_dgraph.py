@@ -15,22 +15,22 @@ import pytest
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from backend.dataops.bpmn_model import Process, Task, TaskStatus
-from backend.dataops.dao import get_dao
-from backend.dataops.implementations.dgraph_dao import DgraphDAO
-from backend.dataops.security_model import (
+from backend.dataops.bpmn_model import Process, Task, TaskStatus  # noqa: E402
+from backend.dataops.dao import get_dao  # noqa: E402
+from backend.dataops.implementations.dgraph_dao import DgraphDAO  # noqa: E402
+from backend.dataops.security_model import (  # noqa: E402
     ACLEntry,
     Permission,
     SecuredStorageModel,
     SecurityContext,
 )
-from backend.dataops.storage_model import StorageModel
-from backend.dataops.storage_types import StorageConfig, StorageType
-from backend.dataops.unified_crud import SyncStrategy, UnifiedCRUD
+from backend.dataops.storage_model import StorageModel  # noqa: E402
+from backend.dataops.storage_types import StorageConfig, StorageType  # noqa: E402
+from backend.dataops.unified_crud import SyncStrategy, UnifiedCRUD  # noqa: E402
 
 
 # Test Models
-class TestUser(SecuredStorageModel):
+class SampleUser(SecuredStorageModel):
     """Test user model with security"""
 
     username: str
@@ -53,7 +53,7 @@ class TestUser(SecuredStorageModel):
         path = "users"
 
 
-class TestDocument(StorageModel):
+class SampleDocument(StorageModel):
     """Test document model"""
 
     title: str
@@ -86,7 +86,7 @@ async def dgraph_dao():
         host="172.72.72.2",
         port=9080,
     )
-    dao = DgraphDAO(TestDocument, config)
+    dao = DgraphDAO(SampleDocument, config)
     await dao.connect()
     yield dao
     await dao.disconnect()
@@ -114,7 +114,7 @@ class TestDgraphConnection:
             port=9080,
         )
 
-        dao = get_dao(TestDocument, config)
+        dao = get_dao(SampleDocument, config)
         assert isinstance(dao, DgraphDAO)
 
         await dao.connect()
@@ -137,7 +137,7 @@ class TestDgraphCRUD:
     @pytest.mark.asyncio
     async def test_create_document(self, dgraph_dao):
         """Test creating a document in Dgraph"""
-        doc = TestDocument(
+        doc = SampleDocument(
             id=str(uuid.uuid4()),
             title="Test Document",
             content="This is test content",
@@ -160,7 +160,7 @@ class TestDgraphCRUD:
     async def test_read_document(self, dgraph_dao):
         """Test reading a document from Dgraph"""
         # Create document
-        doc = TestDocument(
+        doc = SampleDocument(
             id=str(uuid.uuid4()),
             title="Read Test",
             content="Content to read",
@@ -181,7 +181,7 @@ class TestDgraphCRUD:
     async def test_update_document(self, dgraph_dao):
         """Test updating a document in Dgraph"""
         # Create document
-        doc = TestDocument(
+        doc = SampleDocument(
             id=str(uuid.uuid4()),
             title="Original Title",
             content="Original content",
@@ -207,7 +207,7 @@ class TestDgraphCRUD:
     async def test_delete_document(self, dgraph_dao):
         """Test deleting a document from Dgraph"""
         # Create document
-        doc = TestDocument(
+        doc = SampleDocument(
             id=str(uuid.uuid4()),
             title="Delete Test",
             content="To be deleted",
@@ -229,7 +229,7 @@ class TestDgraphCRUD:
         # Create multiple documents
         doc_ids = []
         for i in range(3):
-            doc = TestDocument(
+            doc = SampleDocument(
                 id=str(uuid.uuid4()),
                 title=f"Find Test {i}",
                 content=f"Content {i}",
@@ -264,12 +264,12 @@ class TestSecurityModel:
             port=9080,
         )
 
-        dao = get_dao(TestUser, config)
+        dao = get_dao(SampleUser, config)
         await dao.connect()
 
         try:
             # Create user with security context
-            user = TestUser(
+            user = SampleUser(
                 id=str(uuid.uuid4()),
                 username="testuser",
                 email="test@example.com",
@@ -308,7 +308,7 @@ class TestSecurityModel:
     @pytest.mark.asyncio
     async def test_permission_check(self, security_context):
         """Test permission checking on secured models"""
-        user = TestUser(
+        user = SampleUser(
             id=str(uuid.uuid4()),
             username="secured",
             email="secured@test.com",
@@ -450,10 +450,10 @@ class TestUnifiedCRUD:
     @pytest.mark.asyncio
     async def test_unified_crud_operations(self):
         """Test UnifiedCRUD with single Dgraph backend"""
-        crud = UnifiedCRUD(TestDocument, sync_strategy=SyncStrategy.PRIMARY_FIRST)
+        crud = UnifiedCRUD(SampleDocument, sync_strategy=SyncStrategy.PRIMARY_FIRST)
 
         # Create document
-        doc = TestDocument(
+        doc = SampleDocument(
             id=str(uuid.uuid4()),
             title="Unified CRUD Test",
             content="Testing unified operations",
@@ -484,10 +484,10 @@ class TestUnifiedCRUD:
     @pytest.mark.asyncio
     async def test_unified_crud_with_security(self, security_context):
         """Test UnifiedCRUD with security enabled"""
-        crud = UnifiedCRUD(TestUser, security_enabled=True)
+        crud = UnifiedCRUD(SampleUser, security_enabled=True)
 
         # Create secured user
-        user = TestUser(
+        user = SampleUser(
             id=str(uuid.uuid4()),
             username="unified_secure",
             email="unified@secure.com",
@@ -525,12 +525,12 @@ async def test_dataops_end_to_end():
     )
 
     # Create DAO
-    dao = get_dao(TestUser, config)
+    dao = get_dao(SampleUser, config)
     await dao.connect()
 
     try:
         # 1. Create user with security
-        user = TestUser(
+        user = SampleUser(
             id=str(uuid.uuid4()),
             username="e2e_user",
             email="e2e@test.com",
@@ -545,12 +545,12 @@ async def test_dataops_end_to_end():
         print(f"[OK] Created user: {user.username}")
 
         # 2. Create documents owned by user
-        doc_dao = get_dao(TestDocument, config)
+        doc_dao = get_dao(SampleDocument, config)
         await doc_dao.connect()
 
         docs = []
         for i in range(3):
-            doc = TestDocument(
+            doc = SampleDocument(
                 id=str(uuid.uuid4()),
                 title=f"E2E Doc {i}",
                 content=f"Content for doc {i}",

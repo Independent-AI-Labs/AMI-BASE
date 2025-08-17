@@ -16,7 +16,7 @@ from backend.dataops.unified_crud import SyncStrategy, UnifiedCRUD, get_crud
 from backend.utils.uuid_utils import is_uuid7, uuid7
 
 
-class TestModel(SecuredStorageModel):
+class SampleModel(SecuredStorageModel):
     """Test model for security tests"""
 
     name: str
@@ -97,7 +97,7 @@ class TestSecurityModel:
         # Note: This would need actual DAO implementations to work
         # For now, test the model structure
 
-        model = TestModel(name="test", value=42, owner_id=security_context.user_id, created_by=security_context.user_id)
+        model = SampleModel(name="test", value=42, owner_id=security_context.user_id, created_by=security_context.user_id)
 
         assert model.name == "test"
         assert model.value == 42
@@ -108,7 +108,7 @@ class TestSecurityModel:
     @pytest.mark.asyncio
     async def test_check_permission_owner(self, security_context):
         """Test that owner has all permissions"""
-        model = TestModel(name="test", owner_id=security_context.user_id)
+        model = SampleModel(name="test", owner_id=security_context.user_id)
 
         # Owner should have all permissions
         assert await model.check_permission(security_context, Permission.READ)
@@ -119,7 +119,7 @@ class TestSecurityModel:
     @pytest.mark.asyncio
     async def test_check_permission_with_acl(self, security_context):
         """Test permission checking with ACL"""
-        model = TestModel(
+        model = SampleModel(
             name="test",
             owner_id="other_user",
             acl=[ACLEntry(principal_id="user_123", principal_type="user", permissions=[Permission.READ], granted_by="owner")],
@@ -134,7 +134,7 @@ class TestSecurityModel:
     @pytest.mark.asyncio
     async def test_check_permission_with_role(self, security_context):
         """Test permission checking with role-based ACL"""
-        model = TestModel(
+        model = SampleModel(
             name="test",
             owner_id="other_user",
             acl=[ACLEntry(principal_id="member", principal_type="role", permissions=[Permission.READ, Permission.WRITE], granted_by="owner")],
@@ -148,7 +148,7 @@ class TestSecurityModel:
     @pytest.mark.asyncio
     async def test_check_permission_with_group(self, security_context):
         """Test permission checking with group-based ACL"""
-        model = TestModel(
+        model = SampleModel(
             name="test",
             owner_id="other_user",
             acl=[ACLEntry(principal_id="developers", principal_type="group", permissions=[Permission.READ], granted_by="owner")],
@@ -165,11 +165,11 @@ class TestUnifiedCRUD:
     @pytest.fixture
     def crud(self):
         """Create CRUD instance"""
-        return UnifiedCRUD(model_cls=TestModel, sync_strategy=SyncStrategy.PRIMARY_FIRST, security_enabled=True)
+        return UnifiedCRUD(model_cls=SampleModel, sync_strategy=SyncStrategy.PRIMARY_FIRST, security_enabled=True)
 
     def test_crud_initialization(self, crud):
         """Test CRUD initialization"""
-        assert crud.model_cls == TestModel
+        assert crud.model_cls == SampleModel
         assert crud.sync_strategy == SyncStrategy.PRIMARY_FIRST
         assert crud.security_enabled is True
         assert crud._operations_log == []
@@ -183,8 +183,8 @@ class TestUnifiedCRUD:
 
     def test_get_crud_singleton(self):
         """Test that get_crud returns singleton"""
-        crud1 = get_crud(TestModel)
-        crud2 = get_crud(TestModel)
+        crud1 = get_crud(SampleModel)
+        crud2 = get_crud(SampleModel)
 
         # Should be the same instance
         assert crud1 is crud2
@@ -273,7 +273,7 @@ class TestStorageModel:
 
     def test_model_id_generation(self):
         """Test that model IDs use UUID v7"""
-        model = TestModel(name="test")
+        model = SampleModel(name="test")
 
         # ID should be auto-generated
         assert model.id is not None
@@ -281,7 +281,7 @@ class TestStorageModel:
 
     def test_model_timestamps(self):
         """Test model timestamp fields"""
-        model = TestModel(name="test")
+        model = SampleModel(name="test")
 
         assert model.created_at is not None
         assert model.updated_at is not None
@@ -290,7 +290,7 @@ class TestStorageModel:
 
     def test_model_metadata(self):
         """Test model metadata"""
-        metadata = TestModel.get_metadata()
+        metadata = SampleModel.get_metadata()
 
         assert metadata.path == "test_models"
         assert "graph" in metadata.storage_configs
@@ -305,11 +305,11 @@ class TestStorageModel:
 
     def test_model_collection_name(self):
         """Test model collection name"""
-        assert TestModel.get_collection_name() == "test_models"
+        assert SampleModel.get_collection_name() == "test_models"
 
     def test_model_storage_configs(self):
         """Test model storage configurations"""
-        configs = TestModel.get_storage_configs()
+        configs = SampleModel.get_storage_configs()
 
         assert len(configs) == 2
         assert "graph" in configs
@@ -317,7 +317,7 @@ class TestStorageModel:
 
     def test_model_primary_storage(self):
         """Test getting primary storage config"""
-        primary = TestModel.get_primary_storage_config()
+        primary = SampleModel.get_primary_storage_config()
 
         # Should return first config (graph)
         assert primary.storage_type == StorageType.GRAPH

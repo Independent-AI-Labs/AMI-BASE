@@ -206,10 +206,11 @@ class SecuredStorageModel(StorageModel):
         instances = await cls.find(query, **kwargs)
 
         # Filter by permission
-        permitted = []
+        permitted: list[SecuredStorageModel] = []
         for instance in instances:
-            if await instance.check_permission(context, check_permission):
+            if isinstance(instance, SecuredStorageModel) and await instance.check_permission(context, check_permission):
                 permitted.append(instance)
+            # Skip non-secured models as they shouldn't be in this list
 
         return permitted
 
@@ -223,7 +224,7 @@ class SecuredStorageModel(StorageModel):
         kwargs["modified_by"] = context.user_id
 
         # Update instance
-        return await self.update(**kwargs)
+        return await self.update(**kwargs)  # type: ignore[return-value]
 
     async def delete_with_security(self, context: SecurityContext) -> bool:
         """Delete instance with security check"""

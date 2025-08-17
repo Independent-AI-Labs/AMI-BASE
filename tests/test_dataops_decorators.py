@@ -20,7 +20,7 @@ from backend.dataops.security_model import SecuredStorageModel, SecurityContext
 # Test models
 @sensitive_field("password", mask_pattern="pwd_masked")
 @sensitive_field("api_key", mask_pattern="{field}_hidden")
-class TestUser(SecuredStorageModel):
+class SampleUser(SecuredStorageModel):
     """Test user model with sensitive fields"""
 
     username: str
@@ -30,7 +30,7 @@ class TestUser(SecuredStorageModel):
 
 
 @multi_storage(["dgraph", "mongodb", "redis"], ground_truth="dgraph")
-class TestDocument(SecuredStorageModel):
+class SampleDocument(SecuredStorageModel):
     """Test document with multiple storages"""
 
     title: str
@@ -48,53 +48,53 @@ class TestDecorators:
     def test_sensitive_field_decorator(self):
         """Test sensitive field marking"""
         # Check that sensitive fields are marked
-        assert hasattr(TestUser, "_sensitive_fields")
-        assert "password" in TestUser._sensitive_fields
-        assert "api_key" in TestUser._sensitive_fields
+        assert hasattr(SampleUser, "_sensitive_fields")
+        assert "password" in SampleUser._sensitive_fields
+        assert "api_key" in SampleUser._sensitive_fields
 
         # Check mask patterns
-        assert TestUser._sensitive_fields["password"] == "pwd_masked"
-        assert TestUser._sensitive_fields["api_key"] == "{field}_hidden"
+        assert SampleUser._sensitive_fields["password"] == "pwd_masked"  # noqa: S105
+        assert SampleUser._sensitive_fields["api_key"] == "{field}_hidden"
 
     def test_sanitize_for_mcp(self):
         """Test MCP sanitization"""
-        user = TestUser(username="john", password="secret123", api_key="key_abc123")
+        user = SampleUser(username="john", password="secret123", api_key="key_abc123")  # noqa: S106
 
         # Sanitize for MCP
         sanitized = sanitize_for_mcp(user, caller="mcp")
 
         # Check that sensitive fields are masked
         assert sanitized["username"] == "john"
-        assert sanitized["password"] == "pwd_masked"
+        assert sanitized["password"] == "pwd_masked"  # noqa: S105
         assert "api_key_hidden" in sanitized["api_key"]
         assert sanitized["email"] == "test@example.com"
 
     def test_multi_storage_decorator(self):
         """Test multi-storage decorator"""
         # Check that storage configs are set
-        assert hasattr(TestDocument.Meta, "storage_configs")
-        assert hasattr(TestDocument.Meta, "ground_truth")
+        assert hasattr(SampleDocument.Meta, "storage_configs")
+        assert hasattr(SampleDocument.Meta, "ground_truth")
 
-        configs = TestDocument.Meta.storage_configs
+        configs = SampleDocument.Meta.storage_configs
         assert "dgraph" in configs
         assert "mongodb" in configs
         assert "redis" in configs
 
         # Check ground truth
-        assert TestDocument.Meta.ground_truth == "dgraph"
+        assert SampleDocument.Meta.ground_truth == "dgraph"
         assert configs["dgraph"].options.get("is_ground_truth") is True
 
     @pytest.mark.asyncio
-    async def test_record_event_decorator(self, security_context):
+    async def test_record_event_decorator(self, security_context):  # noqa: ARG002
         """Test event recording decorator"""
 
         @record_event("TestEvent", capture_output=True, sensitive_args=["password"])
-        async def test_function(username: str, password: str, data: dict):
+        async def test_function(username: str, password: str, data: dict):  # noqa: ARG001
             """Test function with event recording"""
             return {"result": "success", "user": username}
 
         # Call the decorated function
-        result = await test_function(username="alice", password="secret", data={"key": "value"})
+        result = await test_function(username="alice", password="secret", data={"key": "value"})  # noqa: S106
 
         # Check result
         assert result["result"] == "success"
@@ -215,6 +215,6 @@ class TestDecorators:
         # Check masking
         assert masked_data["username"] == "john"
         assert masked_data["email"] == "john@example.com"
-        assert masked_data["password"] == "<masked_password>"
+        assert masked_data["password"] == "<masked_password>"  # noqa: S105
         assert masked_data["api_key"] == "<masked_api_key>"
-        assert masked_data["token"] == "<masked_token>"
+        assert masked_data["token"] == "<masked_token>"  # noqa: S105

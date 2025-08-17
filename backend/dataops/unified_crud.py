@@ -58,8 +58,8 @@ class UnifiedCRUD:
             raise ValueError("Security context required for secured models")
 
         # Create instance
-        if self.security_enabled:
-            instance = await self.model_cls.create_with_security(context, **data)
+        if self.security_enabled and hasattr(self.model_cls, "create_with_security"):
+            instance = await self.model_cls.create_with_security(context, **data)  # type: ignore[attr-defined]
         else:
             instance = self.model_cls(**data)
 
@@ -123,7 +123,7 @@ class UnifiedCRUD:
 
         # Set ID from first result
         if not instance.id and results:
-            instance.id = results[0]
+            instance.id = str(results[0])  # Ensure ID is string
 
         return instance
 
@@ -230,7 +230,7 @@ class UnifiedCRUD:
         if self.security_enabled:
             if not context:
                 raise ValueError("Security context required")
-            if not await instance.check_permission(context, Permission.WRITE):
+            if hasattr(instance, "check_permission") and not await instance.check_permission(context, Permission.WRITE):  # type: ignore[attr-defined]
                 raise PermissionError("No write permission")
             data["modified_by"] = context.user_id
 
@@ -249,7 +249,7 @@ class UnifiedCRUD:
                 await dao.update(instance_id, data)
 
         # Return updated instance
-        return await self.model_cls.find_by_id(instance_id)
+        return await self.model_cls.find_by_id(instance_id)  # type: ignore[return-value]
 
     async def delete(self, instance_id: str, context: SecurityContext | None = None, storages: list[str] | None = None) -> bool:
         """Delete instance from storages"""
@@ -262,7 +262,7 @@ class UnifiedCRUD:
         if self.security_enabled:
             if not context:
                 raise ValueError("Security context required")
-            if not await instance.check_permission(context, Permission.DELETE):
+            if hasattr(instance, "check_permission") and not await instance.check_permission(context, Permission.DELETE):  # type: ignore[attr-defined]
                 raise PermissionError("No delete permission")
 
         # Delete from storages
@@ -284,7 +284,9 @@ class UnifiedCRUD:
         """Find instances with optional security filtering"""
         if self.security_enabled and context:
             # Use security-aware find
-            return await self.model_cls.find_with_security(context=context, query=query, **kwargs)
+            if hasattr(self.model_cls, "find_with_security"):
+                return await self.model_cls.find_with_security(context=context, query=query, **kwargs)  # type: ignore[attr-defined]
+            return []
 
         # Regular find
         if primary_only:

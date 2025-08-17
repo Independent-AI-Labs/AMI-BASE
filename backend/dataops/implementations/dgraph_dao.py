@@ -38,7 +38,7 @@ class DgraphDAO(BaseDAO):
 
             logger.info(f"Connected to Dgraph at {host}:{port}")
         except Exception as e:
-            raise StorageError(f"Failed to connect to Dgraph: {e}")
+            raise StorageError(f"Failed to connect to Dgraph: {e}") from e
 
     async def disconnect(self) -> None:
         """Close connection to Dgraph"""
@@ -150,7 +150,7 @@ class DgraphDAO(BaseDAO):
 
         except Exception as e:
             txn.discard()
-            raise StorageError(f"Failed to create in Dgraph: {e}")
+            raise StorageError(f"Failed to create in Dgraph: {e}") from e
 
     async def find_by_id(self, item_id: str) -> StorageModel | None:
         """Find node by UID"""
@@ -256,7 +256,7 @@ class DgraphDAO(BaseDAO):
 
         except Exception as e:
             txn.discard()
-            raise StorageError(f"Failed to update in Dgraph: {e}")
+            raise StorageError(f"Failed to update in Dgraph: {e}") from e
         finally:
             txn.discard()
 
@@ -278,7 +278,8 @@ class DgraphDAO(BaseDAO):
 
         except Exception as e:
             txn.discard()
-            raise StorageError(f"Failed to delete from Dgraph: {e}")
+            error_msg = f"Failed to delete from Dgraph: {e}"  # noqa: S608 - Not SQL, just error message
+            raise StorageError(error_msg) from e
 
     async def count(self, query: dict[str, Any]) -> int:
         """Count nodes matching query"""
@@ -338,7 +339,7 @@ class DgraphDAO(BaseDAO):
 
         except Exception as e:
             txn.discard()
-            raise StorageError(f"Failed to bulk create in Dgraph: {e}")
+            raise StorageError(f"Failed to bulk create in Dgraph: {e}") from e
         finally:
             txn.discard()
 
@@ -374,17 +375,14 @@ class DgraphDAO(BaseDAO):
         txn = self.client.txn(read_only=True)
         try:
             # Add variables if provided
-            if params:
-                response = txn.query(query, variables=params)
-            else:
-                response = txn.query(query)
+            response = txn.query(query, variables=params) if params else txn.query(query)
 
             return json.loads(response.json)
 
         finally:
             txn.discard()
 
-    async def raw_write_query(self, query: str, params: dict[str, Any] | None = None) -> int:
+    async def raw_write_query(self, query: str, _params: dict[str, Any] | None = None) -> int:
         """Execute raw mutation"""
         if not self.client:
             raise StorageError("Not connected to Dgraph")
@@ -400,7 +398,7 @@ class DgraphDAO(BaseDAO):
 
         except Exception as e:
             txn.discard()
-            raise StorageError(f"Failed to execute mutation: {e}")
+            raise StorageError(f"Failed to execute mutation: {e}") from e
         finally:
             txn.discard()
 
@@ -409,7 +407,7 @@ class DgraphDAO(BaseDAO):
         # Dgraph doesn't have traditional databases, return default
         return ["default"]
 
-    async def list_schemas(self, database: str | None = None) -> list[str]:
+    async def list_schemas(self, _database: str | None = None) -> list[str]:
         """List types in Dgraph"""
         if not self.client:
             raise StorageError("Not connected to Dgraph")
@@ -425,18 +423,19 @@ class DgraphDAO(BaseDAO):
         result = await self.raw_read_query(query)
         types = []
 
-        for group in result.get("types", []):
+        result_dict = result[0] if isinstance(result, list) and result else result
+        for group in result_dict.get("types", []) if isinstance(result_dict, dict) else []:
             type_name = group.get("@groupby", [{}])[0].get("dgraph.type")
             if type_name:
                 types.append(type_name)
 
         return types
 
-    async def list_models(self, database: str | None = None, schema: str | None = None) -> list[str]:
+    async def list_models(self, database: str | None = None, _schema: str | None = None) -> list[str]:
         """List types (models) in Dgraph"""
         return await self.list_schemas(database)
 
-    async def get_model_info(self, path: str, database: str | None = None, schema: str | None = None) -> dict[str, Any]:
+    async def get_model_info(self, path: str, _database: str | None = None, _schema: str | None = None) -> dict[str, Any]:
         """Get information about a type"""
         if not self.client:
             raise StorageError("Not connected to Dgraph")
@@ -452,9 +451,12 @@ class DgraphDAO(BaseDAO):
 
         result = await self.raw_read_query(query)
 
-        return {"type": path, "count": result.get("type_info", [{}])[0].get("count(uid)", 0)}
+        result_dict = result[0] if isinstance(result, list) and result else result
+        type_info = result_dict.get("type_info", [{}]) if isinstance(result_dict, dict) else [{}]
+        count = type_info[0].get("count(uid)", 0) if type_info else 0
+        return {"type": path, "count": count}
 
-    async def get_model_schema(self, path: str, database: str | None = None, schema: str | None = None) -> dict[str, Any]:
+    async def get_model_schema(self, path: str, _database: str | None = None, _schema: str | None = None) -> dict[str, Any]:
         """Get schema for a type"""
         if not self.client:
             raise StorageError("Not connected to Dgraph")
@@ -465,13 +467,14 @@ class DgraphDAO(BaseDAO):
 
         # Filter for this type
         type_schema = {}
-        for pred in result.get("schema", []):
+        result_dict = result[0] if isinstance(result, list) and result else result
+        for pred in result_dict.get("schema", []) if isinstance(result_dict, dict) else []:
             if pred.get("predicate", "").startswith(f"{path}."):
                 type_schema[pred["predicate"]] = pred
 
         return type_schema
 
-    async def get_model_fields(self, path: str, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
+    async def get_model_fields(self, path: str, _database: str | None = None, _schema: str | None = None) -> list[dict[str, Any]]:
         """Get fields for a type"""
         schema_info = await self.get_model_schema(path)
 
@@ -482,7 +485,7 @@ class DgraphDAO(BaseDAO):
 
         return fields
 
-    async def get_model_indexes(self, path: str, database: str | None = None, schema: str | None = None) -> list[dict[str, Any]]:
+    async def get_model_indexes(self, path: str, _database: str | None = None, _schema: str | None = None) -> list[dict[str, Any]]:
         """Get indexes for a type"""
         fields = await self.get_model_fields(path)
 
@@ -520,7 +523,7 @@ class DgraphDAO(BaseDAO):
             elif value is None:
                 # Skip None values
                 continue
-            elif isinstance(value, (list, dict)) and key in ["acl", "auth_rules", "tasks"]:
+            elif isinstance(value, list | dict) and key in ["acl", "auth_rules", "tasks"]:
                 # Complex objects should be stored as JSON strings for now
                 # In a full implementation, these would be separate nodes with edges
                 prefixed[f"{self.collection_name}.{key}"] = json.dumps(value, default=str)

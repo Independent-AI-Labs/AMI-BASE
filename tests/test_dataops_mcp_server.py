@@ -6,13 +6,13 @@ import json
 import pytest
 import yaml
 
-from backend.dataops.dataops_mcp_server import DataOpsMCPServer
 from backend.dataops.enhanced_decorators import sensitive_field
 from backend.dataops.security_model import SecuredStorageModel, SecurityContext
 from backend.dataops.storage_model import StorageModel
+from backend.mcp.dataops.server import DataOpsMCPServer
 
 
-class TestModel(StorageModel):
+class SampleModel(StorageModel):
     """Simple test model"""
 
     name: str
@@ -20,7 +20,7 @@ class TestModel(StorageModel):
     description: str = ""
 
 
-class SecureTestModel(SecuredStorageModel):
+class SecureSampleModel(SecuredStorageModel):
     """Secured test model"""
 
     title: str
@@ -35,8 +35,8 @@ class TestDataOpsMCPServer:
     def server(self):
         """Create test server"""
         server = DataOpsMCPServer()
-        server.register_model(TestModel)
-        server.register_model(SecureTestModel)
+        server.register_model(SampleModel)
+        server.register_model(SecureSampleModel)
         return server
 
     @pytest.fixture
@@ -47,8 +47,8 @@ class TestDataOpsMCPServer:
     def test_server_initialization(self, server):
         """Test server initialization"""
         assert len(server._model_registry) == 2
-        assert "TestModel" in server._model_registry
-        assert "SecureTestModel" in server._model_registry
+        assert "SampleModel" in server._model_registry
+        assert "SecureSampleModel" in server._model_registry
 
     def test_registered_tools(self, server):
         """Test that only minimal tools are registered"""
@@ -67,7 +67,7 @@ class TestDataOpsMCPServer:
     @pytest.mark.asyncio
     async def test_dataops_create_dict(self, server, context):
         """Test create operation with dict data"""
-        response = await server._handle_dataops(operation="create", model="TestModel", data={"name": "test1", "value": 42}, context=context)
+        response = await server._handle_dataops(operation="create", model="SampleModel", data={"name": "test1", "value": 42}, context=context)
 
         assert response.success is True
         assert response.data["name"] == "test1"
@@ -78,7 +78,7 @@ class TestDataOpsMCPServer:
         """Test create operation with JSON string data"""
         json_data = json.dumps({"name": "test2", "value": 100})
 
-        response = await server._handle_dataops(operation="create", model="TestModel", data=json_data, format="json", context=context)
+        response = await server._handle_dataops(operation="create", model="SampleModel", data=json_data, format="json", context=context)
 
         assert response.success is True
         data = response.data if isinstance(response.data, dict) else json.loads(response.data)
@@ -94,7 +94,7 @@ class TestDataOpsMCPServer:
         description: YAML test
         """
 
-        response = await server._handle_dataops(operation="create", model="TestModel", data=yaml_data, format="yaml", context=context)
+        response = await server._handle_dataops(operation="create", model="SampleModel", data=yaml_data, format="yaml", context=context)
 
         assert response.success is True
         data = yaml.safe_load(response.data) if isinstance(response.data, str) else response.data
@@ -112,7 +112,7 @@ class TestDataOpsMCPServer:
     @pytest.mark.asyncio
     async def test_dataops_missing_data(self, server, context):
         """Test create without data"""
-        response = await server._handle_dataops(operation="create", model="TestModel", data=None, context=context)
+        response = await server._handle_dataops(operation="create", model="SampleModel", data=None, context=context)
 
         assert response.success is False
         assert "Data required" in response.error
@@ -123,28 +123,28 @@ class TestDataOpsMCPServer:
         response = await server._handle_info()
 
         assert response.success is True
-        assert "TestModel" in response.data
-        assert "SecureTestModel" in response.data
+        assert "SampleModel" in response.data
+        assert "SecureSampleModel" in response.data
 
-        # Check TestModel info
-        test_info = response.data["TestModel"]
-        assert test_info["class"] == "TestModel"
+        # Check SampleModel info
+        test_info = response.data["SampleModel"]
+        assert test_info["class"] == "SampleModel"
         assert "name" in test_info["fields"]
         assert "value" in test_info["fields"]
         assert test_info["secured"] is False
 
-        # Check SecureTestModel info
-        secure_info = response.data["SecureTestModel"]
-        assert secure_info["class"] == "SecureTestModel"
+        # Check SecureSampleModel info
+        secure_info = response.data["SecureSampleModel"]
+        assert secure_info["class"] == "SecureSampleModel"
         assert secure_info["secured"] is True
 
     @pytest.mark.asyncio
     async def test_dataops_info_specific_model(self, server):
         """Test getting info for specific model"""
-        response = await server._handle_info(model="TestModel")
+        response = await server._handle_info(model="SampleModel")
 
         assert response.success is True
-        assert response.data["class"] == "TestModel"
+        assert response.data["class"] == "SampleModel"
         assert "graph" in response.data["storages"]
         assert response.data["ground_truth"] == "graph"
 
@@ -152,9 +152,9 @@ class TestDataOpsMCPServer:
     async def test_dataops_batch_operations(self, server, context):
         """Test batch operations"""
         operations = [
-            {"operation": "create", "model": "TestModel", "data": {"name": "batch1", "value": 1}},
-            {"operation": "create", "model": "TestModel", "data": {"name": "batch2", "value": 2}},
-            {"operation": "create", "model": "TestModel", "data": {"name": "batch3", "value": 3}},
+            {"operation": "create", "model": "SampleModel", "data": {"name": "batch1", "value": 1}},
+            {"operation": "create", "model": "SampleModel", "data": {"name": "batch2", "value": 2}},
+            {"operation": "create", "model": "SampleModel", "data": {"name": "batch3", "value": 3}},
         ]
 
         response = await server._handle_batch(operations=operations, context=context)
@@ -168,13 +168,13 @@ class TestDataOpsMCPServer:
     async def test_dataops_batch_with_error(self, server, context):
         """Test batch operations with error"""
         operations = [
-            {"operation": "create", "model": "TestModel", "data": {"name": "good", "value": 1}},
+            {"operation": "create", "model": "SampleModel", "data": {"name": "good", "value": 1}},
             {
                 "operation": "create",
                 "model": "InvalidModel",  # This will fail
                 "data": {"name": "bad"},
             },
-            {"operation": "create", "model": "TestModel", "data": {"name": "good2", "value": 2}},
+            {"operation": "create", "model": "SampleModel", "data": {"name": "good2", "value": 2}},
         ]
 
         response = await server._handle_batch(
@@ -192,7 +192,7 @@ class TestDataOpsMCPServer:
     async def test_dataops_batch_transaction(self, server, context):
         """Test batch operations as transaction"""
         operations = [
-            {"operation": "create", "model": "TestModel", "data": {"name": "trans1", "value": 1}},
+            {"operation": "create", "model": "SampleModel", "data": {"name": "trans1", "value": 1}},
             {
                 "operation": "create",
                 "model": "InvalidModel",  # This will fail
@@ -212,7 +212,7 @@ class TestDataOpsMCPServer:
 
     def test_model_info_structure(self, server):
         """Test model info structure"""
-        info = server._get_model_info(TestModel)
+        info = server._get_model_info(SampleModel)
 
         assert "class" in info
         assert "storages" in info
@@ -231,10 +231,10 @@ class TestDataOpsMCPServer:
     def test_case_insensitive_model_lookup(self):
         """Test case-insensitive model name lookup"""
         server = DataOpsMCPServer()
-        server.register_model(TestModel, "TestModel")
+        server.register_model(SampleModel, "SampleModel")
 
         # These should all find the model
-        assert server._model_registry.get("TestModel") is not None
+        assert server._model_registry.get("SampleModel") is not None
 
         # In _handle_dataops, it tries case-insensitive if exact match fails
         # This is tested in the actual handler
@@ -247,7 +247,7 @@ class TestDataOpsMCPServer:
             name: str
             secret: str
 
-        instance = SensitiveModel(name="test", secret="password123")
+        instance = SensitiveModel(name="test", secret="password123")  # noqa: S106
 
         # Test with MCP context (should sanitize)
         mcp_context = SecurityContext(user_id="mcp_server")
@@ -255,7 +255,7 @@ class TestDataOpsMCPServer:
 
         # Secret should be masked
         assert output["name"] == "test"
-        assert output["secret"] == "<hidden>"
+        assert output["secret"] == "<hidden>"  # noqa: S105
 
         # Test with user context (should not sanitize)
         user_context = SecurityContext(user_id="real_user")
@@ -263,4 +263,4 @@ class TestDataOpsMCPServer:
 
         # Secret should be visible
         assert output["name"] == "test"
-        assert output["secret"] == "password123"
+        assert output["secret"] == "password123"  # noqa: S105
