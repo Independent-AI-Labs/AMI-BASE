@@ -1,10 +1,17 @@
 """
 Storage type definitions and configurations
 """
+import sys
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+# Add base module to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from base.backend.config.network import IPConfig  # noqa: E402
 
 
 class StorageType(Enum):
@@ -19,17 +26,12 @@ class StorageType(Enum):
     FILE = "file"  # File-based storage (local/S3/etc)
 
 
-class StorageConfig(BaseModel):
+class StorageConfig(IPConfig):
     """Configuration for storage backends"""
 
     storage_type: StorageType
     connection_string: str | None = None
-    host: str | None = "localhost"
-    port: int | None = None
     database: str | None = None
-    username: str | None = None
-    password: str | None = None
-    options: dict[str, Any] = Field(default_factory=dict)
 
     def model_post_init(self, __context: Any) -> None:
         # Set default ports if not specified

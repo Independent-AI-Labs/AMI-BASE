@@ -1,0 +1,49 @@
+# SSH Server Configuration
+# This file defines SSH servers available to the SSH MCP server
+
+servers:
+  # Docker VM example
+  docker-vm:
+    name: docker-vm
+    description: "Docker VM for container management"
+    host: "172.72.72.2"
+    port: 22
+    username: "docker"
+    password: "docker"
+    timeout: 30
+    
+  # Additional server examples (commented out)
+  # dev-server:
+  #   name: dev-server
+  #   description: "Development server"
+  #   host: "dev.example.com"
+  #   port: 22
+  #   username: "developer"
+  #   key_filename: "~/.ssh/dev_key"
+  #   timeout: 30
+  
+  # prod-server:
+  #   name: prod-server
+  #   description: "Production server"
+  #   host: "prod.example.com"
+  #   port: 22
+  #   username: "admin"
+  #   key_filename: "~/.ssh/prod_key"
+  #   passphrase: "secret"
+  #   timeout: 60
+  #   compression: true
+
+# Configuration options
+options:
+  # Enable privileged tools for runtime server management
+  enable_privileged: false
+  
+  # Default timeout for all servers (can be overridden per server)
+  default_timeout: 30
+  
+  # Maximum number of concurrent connections per server
+  max_connections: 5
+  
+  # Auto-reconnect on connection failure
+  auto_reconnect: true
+  reconnect_delay: 5  # seconds
