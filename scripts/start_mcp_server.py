@@ -43,10 +43,41 @@ def main(project_root: Path, mcp_base_path: str, project_name: str) -> int:  # n
             requirements_file = project_root / "requirements.txt"
             if requirements_file.exists():
                 print(f"Installing dependencies from {requirements_file}...")
-                subprocess.run(["uv", "pip", "install", "-r", "requirements.txt"], cwd=str(project_root), check=True)
+                # MUST use the venv we just created with --python flag!
+                subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", "requirements.txt"], cwd=str(project_root), check=True)
                 print("Dependencies installed")
             else:
                 print(f"WARNING: No requirements.txt found at {requirements_file}")
+
+            # Also install test dependencies if they exist
+            test_requirements = project_root / "requirements-test.txt"
+            if test_requirements.exists():
+                print(f"Installing test dependencies from {test_requirements}...")
+                subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", "requirements-test.txt"], cwd=str(project_root), check=True)
+                print("Test dependencies installed")
+
+            # Install essential test packages if requirements-test.txt doesn't exist
+            # These are needed for pre-commit hooks to work
+            print("Installing essential packages for pre-commit...")
+            subprocess.run(
+                [
+                    "uv",
+                    "pip",
+                    "install",
+                    "--python",
+                    str(venv_python),
+                    "pre-commit",
+                    "pytest",
+                    "pytest-asyncio",
+                    "pytest-timeout",
+                    "pytest-mock",
+                    "pytest-cov",
+                    "websockets",
+                ],
+                cwd=str(project_root),
+                check=True,
+            )
+            print("Essential packages installed")
         except subprocess.CalledProcessError as e:
             print(f"ERROR: Failed to create virtual environment: {e}")
             return 1
