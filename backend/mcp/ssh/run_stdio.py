@@ -19,7 +19,7 @@ async def main():
 
     # Create server with YAML configuration
     server = SSHMCPServer(
-        config_file="ssh-servers.yaml",
+        config_file="default-ssh-config.yaml",
         config={"response_format": "yaml"},  # Use YAML for better readability
     )
 

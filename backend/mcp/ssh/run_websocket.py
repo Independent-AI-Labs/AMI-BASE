@@ -17,15 +17,11 @@ async def main():
     logger.remove()  # Remove default handler
     logger.add(sys.stderr, level="INFO")
 
-    # Create server with configuration
-    config = {
-        "host": "172.72.72.2",
-        "username": "docker",
-        "password": "docker",
-        "response_format": "yaml",  # Use YAML for better readability
-    }
-
-    server = SSHMCPServer(config)
+    # Create server with YAML configuration
+    server = SSHMCPServer(
+        config_file="default-ssh-config.yaml",
+        config={"response_format": "yaml"},  # Use YAML for better readability
+    )
 
     # Run in WebSocket mode
     await server.run_websocket(host="localhost", port=8766)

@@ -60,11 +60,14 @@ class SSHMCPServer(BaseMCPServer):
         try:
             path = Path(config_file)
             if not path.exists():
-                # Try relative to base config directory
-                path = Path(__file__).parent.parent.parent.parent / "config" / config_file
+                # Try relative to dataops config directory
+                path = Path(__file__).parent.parent.parent / "dataops" / "config" / config_file
                 if not path.exists():
-                    logger.warning(f"Configuration file not found: {config_file}")
-                    return
+                    # Try legacy config directory
+                    path = Path(__file__).parent.parent.parent.parent / "config" / config_file
+                    if not path.exists():
+                        logger.warning(f"Configuration file not found: {config_file}")
+                        return
 
             with path.open() as f:
                 data = yaml.safe_load(f)
