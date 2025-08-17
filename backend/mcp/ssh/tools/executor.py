@@ -3,9 +3,10 @@
 import asyncio
 from typing import Any
 
-import paramiko
-from base.backend.config.network import SSHConfig
+import paramiko  # type: ignore[import-untyped]
 from loguru import logger
+
+from backend.config.network import SSHConfig
 
 
 class SSHConnection:

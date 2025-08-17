@@ -7,8 +7,9 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
-from base.backend.mcp.ssh.server import SSHMCPServer  # noqa: E402
 from loguru import logger  # noqa: E402
+
+from backend.mcp.ssh.server import SSHMCPServer  # noqa: E402
 
 
 async def main():
@@ -19,7 +20,7 @@ async def main():
 
     # Create server with YAML configuration
     server = SSHMCPServer(
-        config_file="default-ssh-config.yaml",
+        config_file="config/ssh-servers.yaml",
         config={"response_format": "yaml"},  # Use YAML for better readability
     )
 

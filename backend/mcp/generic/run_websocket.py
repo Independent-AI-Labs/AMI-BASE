@@ -15,7 +15,7 @@ from typing import Any
 
 from loguru import logger
 
-from base.backend.mcp.mcp_server import BaseMCPServer
+from backend.mcp.mcp_server import BaseMCPServer
 
 
 def configure_logging(log_level: str = None) -> None:

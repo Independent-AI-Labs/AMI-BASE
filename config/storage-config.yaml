@@ -5,15 +5,15 @@ storage_configs:
   # Dgraph - Primary graph database (always ground truth for security)
   dgraph:
     type: graph
-    host: ${DGRAPH_HOST:-localhost}
+    host: ${DGRAPH_HOST:-172.72.72.2}
     port: ${DGRAPH_PORT:-9080}
     database: ${DGRAPH_DB:-default}
     options:
       is_ground_truth: true  # This is always the security source of truth
       alpha_addresses:
-        - ${DGRAPH_ALPHA:-localhost:9080}
+        - ${DGRAPH_ALPHA:-172.72.72.2:9080}
       zero_addresses:
-        - ${DGRAPH_ZERO:-localhost:5080}
+        - ${DGRAPH_ZERO:-172.72.72.2:5080}
       tls_enabled: ${DGRAPH_TLS:-false}
       auth_token: ${DGRAPH_AUTH_TOKEN}
       namespace: ${DGRAPH_NAMESPACE:-0}
