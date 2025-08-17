@@ -72,6 +72,11 @@ def setup_venv(module_root: Path) -> Path:
     print("Installing pre-commit...")
     subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "pre-commit"], cwd=str(module_root), check=True)
 
+    # ACTUALLY INSTALL THE FUCKING GIT HOOKS
+    print("Installing git hooks...")
+    subprocess.run([str(venv_python), "-m", "pre_commit", "install"], cwd=str(module_root), check=True)
+    subprocess.run([str(venv_python), "-m", "pre_commit", "install", "--hook-type", "pre-push"], cwd=str(module_root), check=True)
+
     print(f"Environment ready: {venv_python}")
     return venv_python
 

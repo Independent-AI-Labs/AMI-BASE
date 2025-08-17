@@ -119,6 +119,11 @@ def ensure_venv_exists(module_root: Path) -> Path:
             text=True,
         )
 
+        # ACTUALLY INSTALL THE FUCKING GIT HOOKS
+        print("Installing git hooks...")
+        subprocess.run([str(venv_python), "-m", "pre_commit", "install"], cwd=str(module_root), check=True)
+        subprocess.run([str(venv_python), "-m", "pre_commit", "install", "--hook-type", "pre-push"], cwd=str(module_root), check=True)
+
         print(f"Virtual environment created successfully at {venv_dir}")
         return venv_python
 
