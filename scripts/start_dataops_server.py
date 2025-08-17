@@ -16,7 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 print(f"Added base to path: {PROJECT_ROOT}")
 
 # Import the generic MCP launcher
-from start_mcp_server import main as start_mcp_main  # noqa: E402
+from scripts.start_mcp_server import main as start_mcp_main  # noqa: E402
 
 
 def main():
