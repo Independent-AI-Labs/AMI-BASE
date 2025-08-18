@@ -8,12 +8,12 @@ import re
 from typing import Any
 
 import asyncpg
-import numpy as np
 
 from ..dao import BaseDAO
 from ..exceptions import StorageError
 from ..storage_model import StorageModel
 from ..storage_types import StorageConfig
+from .embedding_service import get_embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,8 @@ class PgVectorDAO(BaseDAO):
     def __init__(self, model_cls: type[StorageModel], config: StorageConfig | None = None):
         super().__init__(model_cls, config)
         self.connection_pool: asyncpg.Pool | None = None
-        self.embedding_dim = 768  # Default dimension for sentence-transformers
+        self.embedding_service = get_embedding_service()
+        self.embedding_dim = self.embedding_service.embedding_dim
 
     async def connect(self) -> None:
         """Establish connection pool to PostgreSQL"""
@@ -468,20 +469,8 @@ class PgVectorDAO(BaseDAO):
         return await self.vector_search(embedding, limit)
 
     async def _generate_embedding(self, data: dict) -> list[float]:
-        """Generate embedding from data fields"""
-        # Collect all text fields
-        text_parts = []
-        for key, value in data.items():
-            if isinstance(value, str):
-                text_parts.append(f"{key}: {value}")
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, str):
-                        text_parts.append(item)
-
-        # For now, return random embedding
-        # In production, use sentence-transformers
-        return np.random.randn(self.embedding_dim).tolist()
+        """Generate embedding from data fields using sentence-transformers"""
+        return await self.embedding_service.generate_from_dict(data)
 
     def _build_jsonb_where_safe(self, query: dict[str, Any]) -> tuple[str, list[Any]]:
         """Build WHERE clause for JSONB queries with parameterized values"""
