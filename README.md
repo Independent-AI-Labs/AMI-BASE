@@ -10,11 +10,14 @@ AMI-BASE provides the foundational infrastructure for the AMI-ORCHESTRATOR ecosy
 A unified CRUD system that seamlessly manages data across multiple storage backends with automatic synchronization.
 
 **Features:**
-- **Multi-Storage Support**: Dgraph (graph), MongoDB (document), PostgreSQL (relational), Redis (cache), S3 (blob)
+- **Multi-Storage Support**: Dgraph (graph), MongoDB (document), PostgreSQL (relational + pgvector), Redis (cache), S3 (blob)
 - **Automatic Synchronization**: Primary-first, parallel, and transactional sync strategies
 - **Built-in Security**: ACL-based permissions with role and group support
 - **BPMN 2.0 Models**: Full support for business process modeling and execution
 - **UUID v7**: Time-ordered identifiers for natural sorting and tracing
+- **Vector Search**: PgVectorDAO with automatic embeddings for semantic search
+- **Dynamic Schema**: PostgreSQLDAO with automatic table creation and type inference
+- **Advanced Caching**: RedisDAO with TTL support and field indexing
 
 **Example:**
 
@@ -284,6 +287,13 @@ AMI-BASE/
 - Coverage > 80%
 
 ## Recent Updates
+
+### v2.1.0 - IDP Storage Integration
+- **PgVectorDAO**: Vector embeddings with sentence-transformers for semantic search
+- **PostgreSQLDAO**: Dynamic table creation with automatic schema inference
+- **RedisDAO**: Advanced caching with TTL support and field indexing
+- **DgraphDAO**: Extended with graph operations (k-hop, shortest path, components)
+- **SQL Injection Prevention**: Proper identifier validation in all SQL operations
 
 ### v2.0.0 - DataOps Infrastructure
 - Unified CRUD with multi-backend support
