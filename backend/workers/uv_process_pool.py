@@ -251,7 +251,7 @@ class UVProcessPool(WorkerPool[UVProcessWorker, Any]):
             await self._runner.cleanup()
             self._runner = None
 
-    async def _create_worker(self, **kwargs) -> UVProcessWorker:  # noqa: ARG002
+    async def _create_worker(self, **_kwargs) -> UVProcessWorker:
         """Create a new process worker."""
         if not self._runner:
             raise RuntimeError("Pool not initialized")
