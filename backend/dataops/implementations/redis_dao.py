@@ -12,6 +12,7 @@ from redis.asyncio import Redis
 
 if TYPE_CHECKING:
     pass
+from ..storage_model import StorageModel
 from ..storage_types import StorageConfig, StorageError
 
 logger = logging.getLogger(__name__)
@@ -23,12 +24,21 @@ class RedisDAO:
     # Default TTL for cache entries (24 hours)
     DEFAULT_TTL: ClassVar[int] = 86400
 
-    def __init__(self, config: StorageConfig, collection_name: str):
+    def __init__(self, model_cls_or_config: type[StorageModel] | StorageConfig, collection_name_or_config: str | StorageConfig | None = None):
         """Initialize Redis DAO."""
-        self.config = config
-        self.collection_name = collection_name
+        # Handle both signatures for compatibility
+        if isinstance(model_cls_or_config, type) and issubclass(model_cls_or_config, StorageModel):
+            # Called as (model_cls, storage_config) from DAOFactory
+            self.model_cls = model_cls_or_config
+            self.config = collection_name_or_config  # type: ignore[assignment]
+            self.collection_name = getattr(getattr(model_cls_or_config, "Meta", None), "path", model_cls_or_config.__name__.lower())
+        else:
+            # Called as (config, collection_name) directly
+            self.config = model_cls_or_config  # type: ignore[assignment]
+            self.collection_name = collection_name_or_config  # type: ignore[assignment]
+            self.model_cls = None
         self.client: Redis | None = None
-        self._key_prefix = f"{collection_name}:"
+        self._key_prefix = f"{self.collection_name}:"
 
     async def connect(self) -> None:
         """Connect to Redis server."""

@@ -114,7 +114,9 @@ class PgVectorDAO(BaseDAO):
                     ON CONFLICT (id) DO UPDATE
                     SET data = $2, embedding = $3, updated_at = CURRENT_TIMESTAMP
                 """
-                await conn.execute(query, item_id, json.dumps(data), embedding)
+                # Convert embedding list to pgvector format string
+                embedding_str = f"[{','.join(map(str, embedding))}]"
+                await conn.execute(query, item_id, json.dumps(data), embedding_str)
 
             return item_id
 
@@ -231,7 +233,9 @@ class PgVectorDAO(BaseDAO):
                     SET data = $2, embedding = $3, updated_at = CURRENT_TIMESTAMP
                     WHERE id = $1
                 """
-                result = await conn.execute(query, item_id, json.dumps(existing_data), embedding)
+                # Convert embedding list to pgvector format string
+                embedding_str = f"[{','.join(map(str, embedding))}]"
+                result = await conn.execute(query, item_id, json.dumps(existing_data), embedding_str)
 
                 return result.split()[-1] != "0"
 
@@ -321,8 +325,9 @@ class PgVectorDAO(BaseDAO):
                         ON CONFLICT (id) DO UPDATE
                         SET data = $2, embedding = $3, updated_at = CURRENT_TIMESTAMP
                     """
-                    await conn.execute(query, item_id, json.dumps(data), embedding)
-
+                    # Convert embedding list to pgvector format string
+                    embedding_str = f"[{','.join(map(str, embedding))}]"
+                    await conn.execute(query, item_id, json.dumps(data), embedding_str)
                     ids.append(item_id)
 
             return ids
@@ -446,7 +451,9 @@ class PgVectorDAO(BaseDAO):
                     ORDER BY embedding <-> $1
                     LIMIT $2
                 """
-                rows = await conn.fetch(query, embedding, limit)
+                # Convert embedding list to pgvector format string
+                embedding_str = f"[{','.join(map(str, embedding))}]"
+                rows = await conn.fetch(query, embedding_str, limit)
 
                 results = []
                 for row in rows:

@@ -229,8 +229,14 @@ class UnifiedCRUD:
             except Exception as e:
                 logger.error(f"Rollback failed in {storage_name}: {e}")
 
-    async def get(self, item_id: str, storage_name: str | None = None) -> T | None:
-        """Get instance by ID from specified or primary storage"""
+    async def read(self, item_id: str, context: SecurityContext | None = None, storage_name: str | None = None) -> T | None:
+        """Read instance by ID with security context"""
+        # Security check if enabled
+        if self.security_enabled:
+            if not context:
+                raise ValueError("Security context required when security is enabled")
+            # In real implementation, check permissions here
+
         # Get the DAO for the storage
         if storage_name:
             dao = self.model_cls.get_dao(storage_name)
@@ -250,7 +256,7 @@ class UnifiedCRUD:
     async def update(self, instance_id: str, data: dict[str, Any], context: SecurityContext | None = None, storages: list[str] | None = None) -> T:
         """Update instance across storages"""
         # Get instance from primary storage
-        instance: T | None = await self.get(instance_id)
+        instance: T | None = await self.read(instance_id, context)
         if not instance:
             raise ValueError(f"Instance {instance_id} not found")
 
@@ -334,6 +340,26 @@ class UnifiedCRUD:
                     seen_ids.add(result.id)
 
         return all_results
+
+    async def bulk_create(self, items: list[dict[str, Any]], context: SecurityContext | None = None) -> list[str]:
+        """Bulk create multiple instances"""
+        ids: list[str] = []
+        for item in items:
+            instance = await self.create(item, context)
+            ids.append(instance.id)
+        return ids
+
+    async def bulk_delete(self, ids: list[str], context: SecurityContext | None = None) -> int:
+        """Bulk delete multiple instances"""
+        count = 0
+        for item_id in ids:
+            if await self.delete(item_id, context):
+                count += 1
+        return count
+
+    async def query(self, query: dict[str, Any], context: SecurityContext | None = None, **kwargs) -> list[T]:
+        """Query for instances (alias for find)"""
+        return await self.find(query, context, **kwargs)
 
     async def sync_instance(self, instance: T, source_storage: str, target_storages: list[str] | None = None) -> bool:
         """Sync an instance from source to target storages"""

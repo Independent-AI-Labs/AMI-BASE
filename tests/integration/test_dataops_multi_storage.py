@@ -415,7 +415,7 @@ class TestPostgreSQLIntegration:
             username="postgres",
             password="postgres",  # noqa: S106
         )
-        dao = PostgreSQLDAO(SampleDocument, config)
+        dao = PostgreSQLDAO(config, "test_documents")
 
         try:
             await dao.connect()
@@ -428,7 +428,9 @@ class TestPostgreSQLIntegration:
                 # tags=["sql", "dynamic"],  # Skip for now  # noqa: ERA001
                 metadata={"version": 1, "active": True},
             )
-            doc_id = await dao.create(doc)
+            # PostgreSQLDAO expects dict, not model
+            doc_data = doc.to_storage_dict()
+            doc_id = await dao.create(doc_data)
             assert doc_id, "Failed to create document"
 
             # Verify table was created with correct schema
@@ -438,8 +440,8 @@ class TestPostgreSQLIntegration:
             # Read back
             retrieved = await dao.find_by_id(doc_id)
             assert retrieved, "Failed to retrieve document"
-            assert retrieved.title == doc.title
-            assert retrieved.metadata["version"] == 1
+            assert retrieved["title"] == doc.title
+            assert retrieved["metadata"]["version"] == 1
 
             # Query with different data types
             results = await dao.find({"author": "postgres_user"})
@@ -453,7 +455,8 @@ class TestPostgreSQLIntegration:
                 # tags=["extended"],  # Skip for now  # noqa: ERA001
                 metadata={"version": 2, "timestamp": datetime.utcnow().isoformat()},
             )
-            doc2_id = await dao.create(doc2)
+            doc2_data = doc2.to_storage_dict()
+            doc2_id = await dao.create(doc2_data)
 
             # Cleanup
             await dao.delete(doc_id)
@@ -563,7 +566,10 @@ class TestSecurityModel:
             content="Top secret information",
             classification="confidential",
         )
-        doc_dict = doc.to_storage_dict(context=admin_context)
+        doc_dict = doc.to_storage_dict()
+        # Add security context fields manually
+        doc_dict["owner_id"] = admin_context.user_id
+        doc_dict["created_by"] = admin_context.user_id
         instance = await crud.create(doc_dict, context=admin_context)
         assert instance, "Failed to create secured document"
         assert instance.id, "Document should have ID"

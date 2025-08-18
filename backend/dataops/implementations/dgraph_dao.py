@@ -537,8 +537,8 @@ class DgraphDAO(BaseDAO):
             elif value is None:
                 # Skip None values
                 continue
-            elif isinstance(value, list | dict) and key in ["acl", "auth_rules", "tasks", "flow_nodes"]:
-                # Complex objects should be stored as JSON strings for now
+            elif isinstance(value, (list, dict)):
+                # All complex objects should be stored as JSON strings
                 # In a full implementation, these would be separate nodes with edges
                 prefixed[f"{self.collection_name}.{key}"] = json.dumps(value, default=str)
             else:
@@ -574,22 +574,27 @@ class DgraphDAO(BaseDAO):
         # Remove prefixes
         clean_data = {}
         prefix = f"{self.collection_name}."
-        json_fields = ["acl", "auth_rules", "tasks", "flow_nodes"]
 
         for key, value in data.items():
             if key == "uid":
                 clean_data["graph_id"] = value  # Store Dgraph UID
             elif key.startswith(prefix):
                 field_name = key[len(prefix) :]
-                # Parse JSON strings back to objects for complex fields
-                if field_name in json_fields:
-                    clean_data[field_name] = self._parse_json_field(field_name, value)
+                # Parse JSON strings back to objects for string values that look like JSON
+                if isinstance(value, str) and value.startswith(("[", "{")):
+                    try:
+                        clean_data[field_name] = json.loads(value)
+                    except json.JSONDecodeError:
+                        clean_data[field_name] = value
                 else:
                     clean_data[field_name] = value
             elif key not in ["dgraph.type"]:
                 # Handle fields without prefix (might come from expand(_all_))
-                if key in json_fields and isinstance(value, str):
-                    clean_data[key] = self._parse_json_field(key, value)
+                if isinstance(value, str) and value.startswith(("[", "{")):
+                    try:
+                        clean_data[key] = json.loads(value)
+                    except json.JSONDecodeError:
+                        clean_data[key] = value
                 else:
                     clean_data[key] = value
 
