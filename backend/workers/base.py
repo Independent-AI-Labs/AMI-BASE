@@ -214,59 +214,60 @@ class WorkerPool[T, R](ABC):
 
             await asyncio.sleep(0.1)
 
-    async def acquire_worker(self, timeout: float | None = None) -> str:  # noqa: C901
-        """Acquire a worker from the pool"""
-        timeout = timeout or self.config.acquire_timeout
+    async def _acquire_available_worker(self) -> str | None:
+        """Try to acquire an available worker."""
+        async with self._ensure_lock():
+            if not self.available:
+                return None
 
-        async def _try_acquire() -> str | None:
-            """Try to acquire a worker without waiting"""
-            async with self._ensure_lock():
-                # Try to get an available worker
-                if self.available:
-                    worker_info = self.available.popleft()
-                    worker_id = worker_info.id
-                    self.busy[worker_id] = worker_info
-                    worker_info.state = WorkerState.BUSY
-                    worker_info.last_activity = datetime.now()
-                    self.stats.idle_workers -= 1
-                    self.stats.busy_workers += 1
-                    return worker_id
-
-                # Try to wake a hibernating worker
-                if self.hibernating and self.config.enable_hibernation:
-                    worker_id = next(iter(self.hibernating))
-                    worker_info = self.hibernating.pop(worker_id)
-                    worker = await self._get_worker_instance(worker_id)
-                    await self._wake_worker(worker)
-                    self.busy[worker_id] = worker_info
-                    worker_info.state = WorkerState.BUSY
-                    worker_info.last_activity = datetime.now()
-                    self.stats.hibernating_workers -= 1
-                    self.stats.busy_workers += 1
-                    return worker_id
-            return None
-
-        # First attempt - immediate check
-        worker_id = await _try_acquire()
-        if worker_id:
+            worker_info = self.available.popleft()
+            worker_id = worker_info.id
+            self.busy[worker_id] = worker_info
+            worker_info.state = WorkerState.BUSY
+            worker_info.last_activity = datetime.now()
+            self.stats.idle_workers -= 1
+            self.stats.busy_workers += 1
             return worker_id
 
-        # Try to create a new worker if under max
-        if len(self.all_workers) < self.config.max_workers:
-            worker_id = await self._add_worker()
-            if worker_id:
-                async with self._ensure_lock():
-                    worker_info = self.all_workers[worker_id]
-                    if worker_info in self.available:
-                        self.available.remove(worker_info)
-                    self.busy[worker_id] = worker_info
-                    worker_info.state = WorkerState.BUSY
-                    worker_info.last_activity = datetime.now()
-                    self.stats.idle_workers = max(0, self.stats.idle_workers - 1)
-                    self.stats.busy_workers += 1
-                return worker_id
+    async def _acquire_hibernating_worker(self) -> str | None:
+        """Try to wake and acquire a hibernating worker."""
+        async with self._ensure_lock():
+            if not self.hibernating or not self.config.enable_hibernation:
+                return None
 
-        # Wait for a worker to become available
+            worker_id = next(iter(self.hibernating))
+            worker_info = self.hibernating.pop(worker_id)
+            worker = await self._get_worker_instance(worker_id)
+            await self._wake_worker(worker)
+            self.busy[worker_id] = worker_info
+            worker_info.state = WorkerState.BUSY
+            worker_info.last_activity = datetime.now()
+            self.stats.hibernating_workers -= 1
+            self.stats.busy_workers += 1
+            return worker_id
+
+    async def _acquire_new_worker(self) -> str | None:
+        """Try to create and acquire a new worker."""
+        if len(self.all_workers) >= self.config.max_workers:
+            return None
+
+        worker_id = await self._add_worker()
+        if not worker_id:
+            return None
+
+        async with self._ensure_lock():
+            worker_info = self.all_workers[worker_id]
+            if worker_info in self.available:
+                self.available.remove(worker_info)
+            self.busy[worker_id] = worker_info
+            worker_info.state = WorkerState.BUSY
+            worker_info.last_activity = datetime.now()
+            self.stats.idle_workers = max(0, self.stats.idle_workers - 1)
+            self.stats.busy_workers += 1
+        return worker_id
+
+    async def _wait_for_worker(self, timeout: float) -> None:
+        """Wait for a worker to become available."""
         try:
             async with self._ensure_condition():
                 await asyncio.wait_for(self._worker_available.wait_for(lambda: bool(self.available or self.hibernating or self._shutdown)), timeout=timeout)
@@ -276,9 +277,29 @@ class WorkerPool[T, R](ABC):
         if self._shutdown:
             raise RuntimeError("Pool is shutting down")
 
-        # Try again after notification
-        worker_id = await _try_acquire()
-        if worker_id:
+    async def acquire_worker(self, timeout: float | None = None) -> str:
+        """Acquire a worker from the pool."""
+        timeout = timeout or self.config.acquire_timeout
+
+        # Try available workers
+        if worker_id := await self._acquire_available_worker():
+            return worker_id
+
+        # Try hibernating workers
+        if worker_id := await self._acquire_hibernating_worker():
+            return worker_id
+
+        # Try creating new worker
+        if worker_id := await self._acquire_new_worker():
+            return worker_id
+
+        # Wait for worker to become available
+        await self._wait_for_worker(timeout)
+
+        # Try again after waiting
+        if worker_id := await self._acquire_available_worker():
+            return worker_id
+        if worker_id := await self._acquire_hibernating_worker():
             return worker_id
 
         raise RuntimeError("Failed to acquire worker")

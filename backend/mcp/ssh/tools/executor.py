@@ -1,6 +1,7 @@
 """Tool executor for SSH MCP server."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import paramiko  # type: ignore[import-untyped]
@@ -88,6 +89,17 @@ class ToolExecutor:
         self.servers = servers or {}
         self.connections: dict[str, SSHConnection] = {}
 
+        # Initialize tool dispatch map
+        self._tool_handlers: dict[str, Callable[..., Awaitable[dict[str, Any]]]] = {
+            "ssh_list_servers": self._list_servers,
+            "ssh_test_connection": lambda args: self._test_connection(args["server"]),
+            "ssh_execute": lambda args: self._execute_command(args["server"], args["command"], args.get("timeout", 30)),
+            "ssh_upload_file": lambda args: self._upload_file(args["server"], args["local_path"], args["remote_path"]),
+            "ssh_download_file": lambda args: self._download_file(args["server"], args["remote_path"], args["local_path"]),
+            "ssh_connect_server": self._connect_server,
+            "ssh_disconnect_server": lambda args: self._disconnect_server(args["server"]),
+        }
+
     def add_server(self, config: SSHConfig) -> None:
         """Add a new server configuration.
 
@@ -122,25 +134,17 @@ class ToolExecutor:
 
         return self.connections[server_name]
 
-    async def execute(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911
+    async def execute(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool and return the result."""
         logger.debug(f"Executing tool: {tool_name} with arguments: {arguments}")
 
-        # Route to appropriate handler
-        if tool_name == "ssh_list_servers":
-            return await self._list_servers()
-        if tool_name == "ssh_test_connection":
-            return await self._test_connection(arguments["server"])
-        if tool_name == "ssh_execute":
-            return await self._execute_command(arguments["server"], arguments["command"], arguments.get("timeout", 30))
-        if tool_name == "ssh_upload_file":
-            return await self._upload_file(arguments["server"], arguments["local_path"], arguments["remote_path"])
-        if tool_name == "ssh_download_file":
-            return await self._download_file(arguments["server"], arguments["remote_path"], arguments["local_path"])
-        if tool_name == "ssh_connect_server":
-            return await self._connect_server(arguments)
-        if tool_name == "ssh_disconnect_server":
-            return await self._disconnect_server(arguments["server"])
+        # Route to appropriate handler using dispatch map
+        if handler := self._tool_handlers.get(tool_name):
+            # Some handlers don't need arguments
+            if tool_name == "ssh_list_servers":
+                return await handler()
+            return await handler(arguments)
+
         raise ValueError(f"Unknown tool: {tool_name}")
 
     async def _list_servers(self) -> dict[str, Any]:
