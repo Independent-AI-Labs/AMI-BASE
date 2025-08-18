@@ -695,37 +695,38 @@ class DgraphDAO(BaseDAO):
             await self.connect()
 
         try:
-            # Build recursive query for k-hops
-            depth_query = ""
-            for i in range(k):
-                indent = "  " * (i + 1)
-                if edge_types:
-                    # Follow specific edge types
-                    edges = " ".join(edge_types)
-                    depth_query += f"{indent}{edges} {{\n{indent}  uid\n{indent}  dgraph.type\n{indent}  expand(_all_)\n"
-                else:
-                    # Follow all edges
-                    depth_query += f"{indent}expand(_all_) {{\n{indent}  uid\n{indent}  dgraph.type\n"
-
-            # Close all nested blocks
-            for i in range(k):
-                indent = "  " * (k - i)
-                depth_query += f"{indent}}}\n"
-
-            query = f"""
-            {{
-                path(func: uid({start_id})) {{
-                    uid
-                    dgraph.type
-                    expand(_all_)
-                    {depth_query}
+            # Simplified k-hop query without nested expand
+            # Use @recurse with depth limit instead
+            if edge_types:
+                edge_filter = " ".join([f"~{e}" for e in edge_types])
+                query = f"""
+                {{
+                    path(func: uid({start_id})) @recurse(depth: {k + 1}) {{
+                        uid
+                        dgraph.type
+                        {edge_filter}
+                    }}
                 }}
-            }}
-            """
+                """
+            else:
+                # Follow all edges using @recurse
+                query = f"""
+                {{
+                    path(func: uid({start_id})) @recurse(depth: {k + 1}) {{
+                        uid
+                        dgraph.type
+                        expand(_all_)
+                    }}
+                }}
+                """
 
-            response = self.client.query(query)
-            result = json.loads(response.json)
-            return result.get("path", [])
+            txn = self.client.txn(read_only=True)
+            try:
+                response = txn.query(query)
+                result = json.loads(response.json)
+                return result.get("path", [])
+            finally:
+                txn.discard()
 
         except Exception as e:
             logger.error(f"K-hop query failed: {e}")
@@ -761,8 +762,12 @@ class DgraphDAO(BaseDAO):
             }}
             """
 
-            response = self.client.query(query)
-            result = json.loads(response.json)
+            txn = self.client.txn(read_only=True)
+            try:
+                response = txn.query(query)
+                result = json.loads(response.json)
+            finally:
+                txn.discard()
 
             # Extract path UIDs
             path_nodes = result.get("path_nodes", [])
@@ -772,7 +777,7 @@ class DgraphDAO(BaseDAO):
             logger.error(f"Shortest path query failed: {e}")
             raise StorageError(f"Shortest path search failed: {e}") from e
 
-    async def find_connected_components(self, node_type: str | None = None) -> list[list[str]]:  # noqa: C901
+    async def find_connected_components(self, node_type: str | None = None) -> list[list[str]]:  # noqa: C901, PLR0912
         """Find all connected components in the graph.
 
         Args:
@@ -805,9 +810,13 @@ class DgraphDAO(BaseDAO):
                 }
                 """
 
-            response = self.client.query(query)
-            result = json.loads(response.json)
-            nodes = result.get("nodes", [])
+            txn = self.client.txn(read_only=True)
+            try:
+                response = txn.query(query)
+                result = json.loads(response.json)
+                nodes = result.get("nodes", [])
+            finally:
+                txn.discard()
 
             # Track visited nodes
             visited = set()
@@ -837,8 +846,12 @@ class DgraphDAO(BaseDAO):
                             }}
                             """
 
-                            neighbor_response = self.client.query(neighbor_query)
-                            neighbor_result = json.loads(neighbor_response.json)
+                            neighbor_txn = self.client.txn(read_only=True)
+                            try:
+                                neighbor_response = neighbor_txn.query(neighbor_query)
+                                neighbor_result = json.loads(neighbor_response.json)
+                            finally:
+                                neighbor_txn.discard()
 
                             if neighbor_result.get("node"):
                                 for _key, value in neighbor_result["node"][0].items():
@@ -885,8 +898,12 @@ class DgraphDAO(BaseDAO):
             }}
             """
 
-            response = self.client.query(query)
-            result = json.loads(response.json)
+            txn = self.client.txn(read_only=True)
+            try:
+                response = txn.query(query)
+                result = json.loads(response.json)
+            finally:
+                txn.discard()
 
             if not result.get("node"):
                 return {"in": 0, "out": 0, "total": 0}
