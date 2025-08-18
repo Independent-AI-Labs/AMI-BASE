@@ -678,3 +678,240 @@ class DgraphDAO(BaseDAO):
         query_parts.append("}")
 
         return " ".join(query_parts)
+
+    # Graph-specific methods
+    async def k_hop_query(self, start_id: str, k: int, edge_types: list[str] | None = None) -> dict[str, Any]:
+        """Perform k-hop graph traversal from a starting node.
+
+        Args:
+            start_id: UID of the starting node
+            k: Number of hops to traverse
+            edge_types: Optional list of edge types to follow
+
+        Returns:
+            Dict containing nodes and edges found in traversal
+        """
+        if not self.client:
+            await self.connect()
+
+        try:
+            # Build recursive query for k-hops
+            depth_query = ""
+            for i in range(k):
+                indent = "  " * (i + 1)
+                if edge_types:
+                    # Follow specific edge types
+                    edges = " ".join(edge_types)
+                    depth_query += f"{indent}{edges} {{\n{indent}  uid\n{indent}  dgraph.type\n{indent}  expand(_all_)\n"
+                else:
+                    # Follow all edges
+                    depth_query += f"{indent}expand(_all_) {{\n{indent}  uid\n{indent}  dgraph.type\n"
+
+            # Close all nested blocks
+            for i in range(k):
+                indent = "  " * (k - i)
+                depth_query += f"{indent}}}\n"
+
+            query = f"""
+            {{
+                path(func: uid({start_id})) {{
+                    uid
+                    dgraph.type
+                    expand(_all_)
+                    {depth_query}
+                }}
+            }}
+            """
+
+            response = self.client.query(query)
+            result = json.loads(response.json)
+            return result.get("path", [])
+
+        except Exception as e:
+            logger.error(f"K-hop query failed: {e}")
+            raise StorageError(f"K-hop traversal failed: {e}") from e
+
+    async def shortest_path(self, start_id: str, end_id: str, max_depth: int = 10) -> list[str]:
+        """Find shortest path between two nodes.
+
+        Args:
+            start_id: Starting node UID
+            end_id: Target node UID
+            max_depth: Maximum depth to search
+
+        Returns:
+            List of UIDs representing the shortest path
+        """
+        if not self.client:
+            await self.connect()
+
+        try:
+            # Dgraph shortest path query
+            query = f"""
+            {{
+                path as shortest(from: {start_id}, to: {end_id}, depth: {max_depth}) {{
+                    uid
+                }}
+
+                path_nodes(func: uid(path)) {{
+                    uid
+                    dgraph.type
+                    expand(_all_)
+                }}
+            }}
+            """
+
+            response = self.client.query(query)
+            result = json.loads(response.json)
+
+            # Extract path UIDs
+            path_nodes = result.get("path_nodes", [])
+            return [node["uid"] for node in path_nodes]
+
+        except Exception as e:
+            logger.error(f"Shortest path query failed: {e}")
+            raise StorageError(f"Shortest path search failed: {e}") from e
+
+    async def find_connected_components(self, node_type: str | None = None) -> list[list[str]]:  # noqa: C901
+        """Find all connected components in the graph.
+
+        Args:
+            node_type: Optional type filter for nodes
+
+        Returns:
+            List of connected components (each component is a list of UIDs)
+        """
+        if not self.client:
+            await self.connect()
+
+        try:
+            # Get all nodes of specified type
+            if node_type:
+                query = f"""
+                {{
+                    nodes(func: type({node_type})) {{
+                        uid
+                        dgraph.type
+                    }}
+                }}
+                """
+            else:
+                query = """
+                {
+                    nodes(func: has(dgraph.type)) {
+                        uid
+                        dgraph.type
+                    }
+                }
+                """
+
+            response = self.client.query(query)
+            result = json.loads(response.json)
+            nodes = result.get("nodes", [])
+
+            # Track visited nodes
+            visited = set()
+            components = []
+
+            # DFS to find components
+            for node in nodes:
+                uid = node["uid"]
+                if uid not in visited:
+                    component = []
+                    stack = [uid]
+
+                    while stack:
+                        current = stack.pop()
+                        if current not in visited:
+                            visited.add(current)
+                            component.append(current)
+
+                            # Get neighbors
+                            neighbor_query = f"""
+                            {{
+                                node(func: uid({current})) {{
+                                    expand(_all_) {{
+                                        uid
+                                    }}
+                                }}
+                            }}
+                            """
+
+                            neighbor_response = self.client.query(neighbor_query)
+                            neighbor_result = json.loads(neighbor_response.json)
+
+                            if neighbor_result.get("node"):
+                                for _key, value in neighbor_result["node"][0].items():
+                                    if isinstance(value, list):
+                                        for item in value:
+                                            if isinstance(item, dict) and "uid" in item and item["uid"] not in visited:
+                                                stack.append(item["uid"])
+
+                    if component:
+                        components.append(component)
+
+            return components
+
+        except Exception as e:
+            logger.error(f"Connected components query failed: {e}")
+            raise StorageError(f"Connected components search failed: {e}") from e
+
+    async def get_node_degree(self, node_id: str, direction: str = "all") -> dict[str, int]:  # noqa: C901
+        """Get degree of a node (in-degree, out-degree, or total).
+
+        Args:
+            node_id: Node UID
+            direction: "in", "out", or "all"
+
+        Returns:
+            Dict with degree counts
+        """
+        if not self.client:
+            await self.connect()
+
+        try:
+            query = f"""
+            {{
+                node(func: uid({node_id})) {{
+                    uid
+                    dgraph.type
+                    expand(_all_) {{
+                        count(uid)
+                    }}
+                    ~expand(_all_) {{
+                        count(uid)
+                    }}
+                }}
+            }}
+            """
+
+            response = self.client.query(query)
+            result = json.loads(response.json)
+
+            if not result.get("node"):
+                return {"in": 0, "out": 0, "total": 0}
+
+            node_data = result["node"][0]
+
+            # Count edges
+            out_degree = 0
+            in_degree = 0
+
+            for key, value in node_data.items():
+                if key.startswith("~"):
+                    # Reverse edge (in-degree)
+                    if isinstance(value, list):
+                        in_degree += len(value)
+                elif key not in ["uid", "dgraph.type"] and isinstance(value, list):
+                    # Forward edge (out-degree)
+                    out_degree += len(value)
+
+            if direction == "in":
+                return {"in": in_degree}
+            if direction == "out":
+                return {"out": out_degree}
+            return {"in": in_degree, "out": out_degree, "total": in_degree + out_degree}
+
+        except Exception as e:
+            logger.error(f"Node degree query failed: {e}")
+            raise StorageError(f"Node degree calculation failed: {e}") from e
