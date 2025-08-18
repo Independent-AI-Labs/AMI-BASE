@@ -187,7 +187,7 @@ class DAOFactory:
             elif storage_type == StorageType.CACHE:
                 from .implementations.redis_dao import RedisDAO
 
-                cls.register(StorageType.CACHE, RedisDAO)
+                cls.register(StorageType.CACHE, RedisDAO)  # type: ignore[arg-type]
             elif storage_type == StorageType.VECTOR:
                 from .implementations.pgvector_dao import PgVectorDAO
 

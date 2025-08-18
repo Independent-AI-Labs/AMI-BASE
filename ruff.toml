@@ -53,6 +53,9 @@ max-branches = 16
 "backend/dataops/implementations/pgvector_dao.py" = [
     "S608",     # SQL injection - we validate identifiers with _is_valid_identifier
 ]
+"backend/dataops/implementations/postgresql_dao.py" = [
+    "S608",     # SQL injection - we validate identifiers with _is_valid_identifier
+]
 
 [format]
 line-ending = "auto"

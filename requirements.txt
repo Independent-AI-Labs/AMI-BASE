@@ -8,3 +8,4 @@ websockets==15.0.1
 asyncpg==0.30.0
 numpy==1.26.4
 sentence-transformers==5.1.0
+redis==5.2.1

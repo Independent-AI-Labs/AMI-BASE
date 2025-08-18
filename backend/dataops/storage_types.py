@@ -9,6 +9,10 @@ from pydantic import BaseModel, Field
 from ..config.network import IPConfig
 
 
+class StorageError(Exception):
+    """Custom exception for storage operations."""
+
+
 class StorageType(Enum):
     """Supported storage backend types"""
 
