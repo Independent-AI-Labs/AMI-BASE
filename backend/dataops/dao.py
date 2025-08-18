@@ -189,9 +189,9 @@ class DAOFactory:
 
                 cls.register(StorageType.CACHE, RedisDAO)
             elif storage_type == StorageType.VECTOR:
-                from .implementations.vector_dao import VectorDAO
+                from .implementations.pgvector_dao import PgVectorDAO
 
-                cls.register(StorageType.VECTOR, VectorDAO)
+                cls.register(StorageType.VECTOR, PgVectorDAO)
             elif storage_type == StorageType.TIMESERIES:
                 from .implementations.timeseries_dao import TimeseriesDAO
 
