@@ -5,10 +5,11 @@ import json
 
 import pytest
 import yaml
-from services.dataops.enhanced_decorators import sensitive_field
-from services.dataops.security_model import SecuredStorageModel, SecurityContext
-from services.dataops.storage_model import StorageModel
-from services.mcp.dataops.server import DataOpsMCPServer
+
+from backend.dataops.enhanced_decorators import sensitive_field
+from backend.dataops.security_model import SecuredStorageModel, SecurityContext
+from backend.dataops.storage_model import StorageModel
+from backend.mcp.dataops.server import DataOpsMCPServer
 
 
 class SampleModel(StorageModel):
@@ -77,7 +78,7 @@ class TestDataOpsMCPServer:
         """Test create operation with JSON string data"""
         json_data = json.dumps({"name": "test2", "value": 100})
 
-        response = await server._handle_dataops(operation="create", model="SampleModel", data=json_data, format="json", context=context)
+        response = await server._handle_dataops(operation="create", model="SampleModel", data=json_data, data_format="json", context=context)
 
         assert response.success is True
         data = response.data if isinstance(response.data, dict) else json.loads(response.data)
@@ -93,7 +94,7 @@ class TestDataOpsMCPServer:
         description: YAML test
         """
 
-        response = await server._handle_dataops(operation="create", model="SampleModel", data=yaml_data, format="yaml", context=context)
+        response = await server._handle_dataops(operation="create", model="SampleModel", data=yaml_data, data_format="yaml", context=context)
 
         assert response.success is True
         data = yaml.safe_load(response.data) if isinstance(response.data, str) else response.data

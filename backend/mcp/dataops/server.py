@@ -10,7 +10,8 @@ from typing import Any
 
 import yaml
 from loguru import logger
-from services.dataops.bpmn_model import (
+
+from backend.dataops.bpmn_model import (
     Event,
     Gateway,
     Process,
@@ -18,10 +19,10 @@ from services.dataops.bpmn_model import (
 )
 
 # Import from parent modules
-from services.dataops.security_model import SecuredStorageModel
-from services.dataops.storage_model import StorageModel
-from services.dataops.unified_crud import UnifiedCRUD
-from services.mcp.mcp_server import BaseMCPServer
+from backend.dataops.security_model import SecuredStorageModel
+from backend.dataops.storage_model import StorageModel
+from backend.dataops.unified_crud import UnifiedCRUD
+from backend.mcp.mcp_server import BaseMCPServer
 
 
 @dataclass
@@ -107,7 +108,7 @@ class DataOpsMCPServer(BaseMCPServer):
             data = arguments.get("data")
             format_val = arguments.get("format", "dict")
             context = arguments.get("context")
-            result = await self._handle_dataops(operation, model, data, format=format_val, context=context)
+            result = await self._handle_dataops(operation, model, data, data_format=format_val, context=context)
             return result.data if result.success else {"error": result.error}
 
         if tool_name == "dataops_info":
@@ -219,7 +220,7 @@ class DataOpsMCPServer(BaseMCPServer):
 
         return DataOpsResponse(success=False, error=f"Unknown operation: {operation}")
 
-    async def _handle_dataops(self, operation: str, model: str, data: Any = None, format: str = "dict", context: Any = None) -> DataOpsResponse:  # noqa: A002
+    async def _handle_dataops(self, operation: str, model: str, data: Any = None, data_format: str = "dict", context: Any = None) -> DataOpsResponse:
         """Handle DataOps CRUD operations"""
         try:
             # Find model
@@ -232,7 +233,7 @@ class DataOpsMCPServer(BaseMCPServer):
                 return DataOpsResponse(success=False, error="Data required for create/update")
 
             # Parse data
-            data = self._parse_data(data, format)
+            data = self._parse_data(data, data_format)
 
             # For test models, always use mock operations to avoid DAO issues
             # Check if model_name is from tests

@@ -4,15 +4,16 @@ Tests for the DataOps security model and unified CRUD
 from datetime import datetime, timedelta
 
 import pytest
-from services.dataops.security_model import (
+
+from backend.dataops.security_model import (
     ACLEntry,
     Permission,
     SecuredStorageModel,
     SecurityContext,
 )
-from services.dataops.storage_types import StorageConfig, StorageType
-from services.dataops.unified_crud import SyncStrategy, UnifiedCRUD, get_crud
-from services.utils.uuid_utils import is_uuid7, uuid7
+from backend.dataops.storage_types import StorageConfig, StorageType
+from backend.dataops.unified_crud import SyncStrategy, UnifiedCRUD, get_crud
+from backend.utils.uuid_utils import is_uuid7, uuid7
 
 
 class SampleModel(SecuredStorageModel):
@@ -190,7 +191,7 @@ class TestUnifiedCRUD:
 
     def test_operations_log(self, crud):
         """Test operations log management"""
-        from services.dataops.unified_crud import StorageOperation
+        from backend.dataops.unified_crud import StorageOperation
 
         # Add operation to log
         op = StorageOperation(storage_name="graph", operation="create", data={"name": "test"}, status="success")
@@ -247,7 +248,7 @@ class TestUUIDv7:
 
     def test_uuid7_extract_timestamp(self):
         """Test timestamp extraction from UUID v7"""
-        from services.utils.uuid_utils import extract_timestamp_from_uuid7
+        from backend.utils.uuid_utils import extract_timestamp_from_uuid7
 
         uuid = uuid7()
         timestamp = extract_timestamp_from_uuid7(uuid)
@@ -260,7 +261,7 @@ class TestUUIDv7:
 
     def test_uuid7_with_prefix(self):
         """Test UUID v7 with prefix"""
-        from services.utils.uuid_utils import uuid7_prefix
+        from backend.utils.uuid_utils import uuid7_prefix
 
         prefixed = uuid7_prefix("user")
         assert prefixed.startswith("user_")

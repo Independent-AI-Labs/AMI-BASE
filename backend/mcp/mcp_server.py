@@ -128,7 +128,7 @@ class BaseMCPServer(ABC):
         """
         logger.info(f"Starting MCP server on ws://{host}:{port}")
 
-        async def handle_connection(websocket, path=None):  # noqa: ARG001
+        async def handle_connection(websocket, _path=None):
             """Handle a WebSocket connection."""
             transport = WebSocketTransport(websocket)
             self._connections.add(websocket)
@@ -196,7 +196,7 @@ class BaseMCPServer(ABC):
 
         logger.info(f"{self.__class__.__name__} stopped")
 
-    async def _handle_websocket_connection(self, websocket, path=None):  # noqa: ARG002
+    async def _handle_websocket_connection(self, websocket, _path=None):
         """Handle a WebSocket connection for start/stop mode."""
         transport = WebSocketTransport(websocket)
         self._connections.add(websocket)
@@ -287,7 +287,7 @@ class BaseMCPServer(ABC):
                 "initialize": self._handle_initialize,
                 "tools/list": self._handle_tools_list,
                 "tools/call": self._handle_tools_call,
-                "ping": lambda p: {"status": "pong"},  # noqa: ARG005
+                "ping": lambda _: {"status": "pong"},
             }
 
             handler = handler_map.get(method)
@@ -304,7 +304,7 @@ class BaseMCPServer(ABC):
             logger.error(f"Error handling request: {e}")
             return self._format_error(-32603, f"Internal error: {str(e)}", request_id)
 
-    async def _handle_initialize(self, params: dict) -> dict:  # noqa: ARG002
+    async def _handle_initialize(self, _params: dict) -> dict:
         """Handle initialize request."""
         return {
             "protocolVersion": "2024-11-05",
@@ -318,7 +318,7 @@ class BaseMCPServer(ABC):
             },
         }
 
-    async def _handle_tools_list(self, params: dict) -> dict:  # noqa: ARG002
+    async def _handle_tools_list(self, _params: dict) -> dict:
         """Handle tools/list request."""
         tools = []
         for name, info in self.tools.items():

@@ -91,7 +91,7 @@ class SimpleProcessPool(WorkerPool[SimpleProcessWorker, Any]):
         self._python_exe = sys.executable
         self._base_dir = str(Path(__file__).parent.parent.parent)
 
-    async def _create_worker(self, **kwargs) -> SimpleProcessWorker:  # noqa: ARG002
+    async def _create_worker(self, **_kwargs) -> SimpleProcessWorker:
         """Create a new worker."""
         worker_id = str(uuid.uuid4())
         worker = SimpleProcessWorker(worker_id)

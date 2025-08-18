@@ -11,7 +11,8 @@ from loguru import logger
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from services.workers import PoolConfig, PoolType, WorkerPoolManager  # noqa: E402
+from backend.workers.base import WorkerPoolManager  # noqa: E402
+from backend.workers.types import PoolConfig, PoolType  # noqa: E402
 
 # Configure logging
 logger.remove()

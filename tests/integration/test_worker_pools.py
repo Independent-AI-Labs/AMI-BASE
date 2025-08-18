@@ -6,7 +6,8 @@ from datetime import datetime
 
 import pytest
 from loguru import logger
-from services.workers import PoolConfig, PoolType
+
+from backend.workers.types import PoolConfig, PoolType
 
 # Module-level functions for process pool testing
 test_value = 0
@@ -417,7 +418,7 @@ class TestPoolManager:
 
         # Submit tasks to different pools
         # Using module-level function for process pool compatibility
-        from services.workers.test_functions import simple_add
+        from backend.workers.test_functions import simple_add
 
         task_results = []
         for i, pool in enumerate(pools):
@@ -473,7 +474,7 @@ class TestProcessPoolSpecific:
         # Each process should have its own memory space
 
         # Using module-level modify_global function from backend.workers.test_functions
-        from services.workers.test_functions import modify_global
+        from backend.workers.test_functions import modify_global
 
         # Submit multiple tasks
         task_ids = []
@@ -500,7 +501,7 @@ class TestProcessPoolSpecific:
         tasks = []
         for n in [30, 31, 32]:  # Reasonably intensive
             # Use module-level fibonacci function from test_functions
-            from services.workers.test_functions import fibonacci
+            from backend.workers.test_functions import fibonacci
 
             task_id = await process_pool.submit(fibonacci, n)
             tasks.append((n, task_id))
@@ -626,7 +627,7 @@ class TestStressAndPerformance:
     @pytest.mark.slow
     async def test_memory_intensive_tasks(self, pool_manager):
         """Test handling of memory-intensive tasks."""
-        from services.workers.test_functions import memory_intensive
+        from backend.workers.test_functions import memory_intensive
 
         config = PoolConfig(
             name="memory_pool",

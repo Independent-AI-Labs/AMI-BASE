@@ -128,7 +128,7 @@ class ProcessWorkerPool(WorkerPool[ProcessWorker, Any]):
             self._pool.terminate()
             self._pool = None
 
-    async def _create_worker(self, **kwargs) -> ProcessWorker:  # noqa: ARG002
+    async def _create_worker(self, **_kwargs) -> ProcessWorker:
         """Create a new process worker."""
         worker_id = str(uuid.uuid4())
         return ProcessWorker(worker_id)
@@ -137,7 +137,7 @@ class ProcessWorkerPool(WorkerPool[ProcessWorker, Any]):
         """Destroy a process worker."""
         worker.shutdown()
 
-    async def _execute_task(self, worker: ProcessWorker, task: TaskInfo) -> Any:  # noqa: ARG002
+    async def _execute_task(self, _worker: ProcessWorker, task: TaskInfo) -> Any:
         """Execute a task on a process worker."""
         if self._pool is None:
             raise RuntimeError("Process pool not initialized")

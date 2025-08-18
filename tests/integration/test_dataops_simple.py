@@ -50,7 +50,7 @@ async def test_simple_storage():
     print("\n[OK] Simple model test passed!")
 
     # Now let's test with BPMN model
-    from services.dataops.bpmn_model import Task, TaskStatus
+    from backend.dataops.bpmn_model import Task, TaskStatus
 
     task = Task(id="task-1", name="Test Task", state=TaskStatus.PENDING, assignee="user-1")
 
@@ -61,7 +61,7 @@ async def test_simple_storage():
     print("\n[OK] BPMN model test passed!")
 
     # Test security model
-    from services.dataops.security_model import SecurityContext
+    from backend.dataops.security_model import SecurityContext
 
     context = SecurityContext(user_id="test-user", roles=["admin"], groups=["developers"])
 
