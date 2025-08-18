@@ -13,11 +13,11 @@ _parent_dir = Path(__file__).parent.parent.parent.parent
 if _parent_dir.exists() and str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
 
-from services.config.network import SSHConfig  # noqa: E402
-from services.mcp.mcp_server import BaseMCPServer  # noqa: E402
-from services.mcp.ssh.tools.definitions import register_all_tools  # noqa: E402
-from services.mcp.ssh.tools.executor import ToolExecutor  # noqa: E402
-from services.mcp.ssh.tools.registry import ToolRegistry  # noqa: E402
+from backend.config.network import SSHConfig  # noqa: E402
+from backend.mcp.mcp_server import BaseMCPServer  # noqa: E402
+from backend.mcp.ssh.tools.definitions import register_all_tools  # noqa: E402
+from backend.mcp.ssh.tools.executor import ToolExecutor  # noqa: E402
+from backend.mcp.ssh.tools.registry import ToolRegistry  # noqa: E402
 
 
 class SSHMCPServer(BaseMCPServer):
