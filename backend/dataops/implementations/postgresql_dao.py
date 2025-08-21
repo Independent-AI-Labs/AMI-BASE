@@ -481,8 +481,7 @@ class PostgreSQLDAO:
         """Serialize value for PostgreSQL storage."""
         if isinstance(value, dict | list):
             return json.dumps(value)
-        if isinstance(value, datetime):
-            return value.isoformat()
+        # Don't serialize datetime - PostgreSQL handles it natively
         return value
 
     def _deserialize_row(self, row: dict[str, Any]) -> dict[str, Any]:

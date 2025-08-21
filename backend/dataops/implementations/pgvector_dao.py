@@ -475,10 +475,14 @@ class PgVectorDAO(BaseDAO):
             logger.exception(f"Failed to vector search: {e}")
             raise StorageError(f"Vector search failed: {e}") from e
 
-    async def semantic_search(self, query_text: str, limit: int = 10) -> list[StorageModel]:
+    async def semantic_search(self, query_text: str | None = None, query: str | None = None, limit: int = 10) -> list[StorageModel]:
         """Search by semantic similarity using text query"""
+        # Handle both parameter names for compatibility
+        text = query_text or query
+        if not text:
+            raise ValueError("Either query_text or query must be provided")
         # Generate embedding for query
-        embedding = await self._generate_embedding({"query": query_text})
+        embedding = await self._generate_embedding({"query": text})
         return await self.vector_search(embedding, limit)
 
     async def _generate_embedding(self, data: dict) -> list[float]:
