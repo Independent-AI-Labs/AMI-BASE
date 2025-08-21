@@ -635,8 +635,8 @@ class TestIntegrationScenarios:
                 },
             )
             doc_dict = doc.to_storage_dict()
-            doc_id = await crud.create(doc_dict)
-            documents.append((doc_id, doc))
+            created_instance = await crud.create(doc_dict)
+            documents.append((created_instance.id, doc))
 
         # 2. Search and retrieve
         # Search by author

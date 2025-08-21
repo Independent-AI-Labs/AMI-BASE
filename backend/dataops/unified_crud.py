@@ -95,7 +95,9 @@ class UnifiedCRUD:
 
                 # Update instance ID from first successful create
                 if not instance.id:
-                    instance.id = result_id
+                    instance_dict = instance.to_storage_dict()
+                    instance_dict["id"] = result_id
+                    instance = self.model_cls.from_storage_dict(instance_dict)
             except Exception as e:
                 operation.status = "failed"
                 operation.error = str(e)
@@ -130,7 +132,9 @@ class UnifiedCRUD:
 
         # Set ID from first result
         if not instance.id and results:
-            instance.id = str(results[0])  # Ensure ID is string
+            instance_dict = instance.to_storage_dict()
+            instance_dict["id"] = str(results[0])  # Ensure ID is string
+            instance = self.model_cls.from_storage_dict(instance_dict)
 
         return instance
 
@@ -148,7 +152,10 @@ class UnifiedCRUD:
 
         try:
             result_id = await primary_dao.create(instance)
-            instance.id = result_id
+            # Create new instance with the ID (can't modify frozen Pydantic model)
+            instance_dict = instance.to_storage_dict()
+            instance_dict["id"] = result_id
+            instance = self.model_cls.from_storage_dict(instance_dict)
             operation.status = "success"
             operation.result = result_id
         except Exception as e:
@@ -183,7 +190,10 @@ class UnifiedCRUD:
         primary_dao = daos[primary_name]
 
         result_id = await primary_dao.create(instance)
-        instance.id = result_id
+        # Create new instance with ID
+        instance_dict = instance.to_storage_dict()
+        instance_dict["id"] = result_id
+        instance = self.model_cls.from_storage_dict(instance_dict)
 
         # Schedule background sync for other storages
         other_daos = {k: v for k, v in daos.items() if k != primary_name}
@@ -283,12 +293,12 @@ class UnifiedCRUD:
                 await dao.update(instance_id, data)
 
         # Return updated instance
-        return await self.model_cls.find_by_id(instance_id)  # type: ignore[return-value]
+        return await self.read(instance_id, context)
 
     async def delete(self, instance_id: str, context: SecurityContext | None = None, storages: list[str] | None = None) -> bool:
         """Delete instance from storages"""
         # Get instance for security check
-        instance = await self.model_cls.find_by_id(instance_id)
+        instance = await self.read(instance_id, context)
         if not instance:
             return False
 

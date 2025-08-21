@@ -264,12 +264,17 @@ class PostgreSQLDAO:
                     values.append(self._serialize_value(value))
                     placeholders.append(f"${i}")
 
+            # Build UPDATE SET clause excluding id and updated_at (which is set separately)
+            update_cols = [f'{col} = EXCLUDED.{col}' for col in columns if col not in ('id', 'updated_at')]
+            if update_cols:
+                update_clause = ', '.join(update_cols) + ', updated_at = CURRENT_TIMESTAMP'
+            else:
+                update_clause = 'updated_at = CURRENT_TIMESTAMP'
+            
             insert_sql = f"""
                 INSERT INTO {table_name} ({', '.join(columns)})
                 VALUES ({', '.join(placeholders)})
-                ON CONFLICT (id) DO UPDATE SET
-                    {', '.join(f'{col} = EXCLUDED.{col}' for col in columns if col != 'id')},
-                    updated_at = CURRENT_TIMESTAMP
+                ON CONFLICT (id) DO UPDATE SET {update_clause}
                 RETURNING id
             """
 

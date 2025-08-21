@@ -437,10 +437,16 @@ class PgVectorDAO(BaseDAO):
             logger.warning(f"Failed to create some indexes: {e}")
 
     # Vector-specific methods
-    async def vector_search(self, embedding: list[float], limit: int = 10) -> list[StorageModel]:
+    async def vector_search(self, embedding: list[float] | None = None, query_text: str | None = None, limit: int = 10, **kwargs) -> list[StorageModel]:
         """Search by vector similarity"""
         if not self.connection_pool:
             await self.connect()
+
+        # Generate embedding from text if not provided
+        if embedding is None and query_text:
+            embedding = await self._generate_embedding({"query": query_text})
+        elif embedding is None:
+            raise ValueError("Either embedding or query_text must be provided")
 
         try:
             async with self.connection_pool.acquire() as conn:
