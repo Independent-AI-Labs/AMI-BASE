@@ -295,18 +295,13 @@ class DgraphDAO(BaseDAO):
             # Add UID to data
             update_data = {"uid": actual_uid}
 
-            # Add prefixed fields - handle complex fields like in _to_dgraph_format
+            # Add prefixed fields - let set_json handle the encoding
             for key, value in data.items():
-                if key != "id":  # Skip ID field
-                    # Handle list/dict fields that need JSON encoding
-                    if isinstance(value, list | dict):
-                        # All complex objects should be JSON-encoded for Dgraph
-                        update_data[f"{self.collection_name}.{key}"] = json.dumps(value, default=str)
-                    elif value is not None:
-                        update_data[f"{self.collection_name}.{key}"] = value
+                if key != "id" and value is not None:  # Skip ID field and None values
+                    update_data[f"{self.collection_name}.{key}"] = value
 
-            # Create mutation
-            mutation = pydgraph.Mutation(set_json=json.dumps(update_data).encode())
+            # Create mutation - set_json will handle JSON encoding
+            mutation = pydgraph.Mutation(set_json=json.dumps(update_data, default=str).encode())
 
             # Commit
             txn.mutate(mutation)

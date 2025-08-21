@@ -18,7 +18,7 @@ from backend.dataops.implementations.dgraph_dao import DgraphDAO
 from backend.dataops.implementations.pgvector_dao import PgVectorDAO
 from backend.dataops.implementations.postgresql_dao import PostgreSQLDAO
 from backend.dataops.implementations.redis_dao import RedisDAO
-from backend.dataops.security_model import ACLEntry, SecuredStorageModel, SecurityContext
+from backend.dataops.security_model import ACLEntry, Permission, SecuredStorageModel, SecurityContext
 from backend.dataops.storage_model import StorageModel
 from backend.dataops.storage_types import StorageConfig, StorageType
 from backend.dataops.unified_crud import SyncStrategy, UnifiedCRUD
@@ -581,18 +581,18 @@ class TestSecurityModel:
 
         # Create ACL entry for user access
         acl_entry = ACLEntry(
-            resource_id=instance.id,
-            resource_type="SecuredSampleDocument",
             principal_type="user",
             principal_id="regular_user",
-            permissions=["read"],
+            permissions=[Permission.READ],
+            resource_path=f"/documents/{instance.id}",
+            granted_by="admin",
         )
 
         # In real implementation, this would be saved to Dgraph
         # For testing, we verify the structure
-        assert acl_entry.resource_id == instance.id
-        assert "read" in acl_entry.permissions
-        assert "write" not in acl_entry.permissions
+        assert acl_entry.resource_path == f"/documents/{instance.id}"
+        assert Permission.READ in acl_entry.permissions
+        assert Permission.WRITE not in acl_entry.permissions
 
         # Update with audit info
         updated = await crud.update(
