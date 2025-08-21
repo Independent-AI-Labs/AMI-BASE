@@ -67,8 +67,11 @@ class DgraphDAO(BaseDAO):
                 index_type = "exact"  # Use exact tokenizer for hash indexes
             indexed_fields[field_name] = index_type
 
+        # Always index the ID field for lookups
+        schema_parts.append(f"{self.collection_name}.id: string @index(exact) .")
+
         # Add type definition
-        type_def = f"type {self.collection_name} {{"
+        type_def = f"type {self.collection_name} {{\n  {self.collection_name}.id"
 
         for field_name, field_info in self.model_cls.model_fields.items():
             # Map Python types to Dgraph types
@@ -163,19 +166,31 @@ class DgraphDAO(BaseDAO):
             raise StorageError(f"Failed to create in Dgraph: {e}") from e
 
     async def find_by_id(self, item_id: str) -> StorageModel | None:
-        """Find node by UID"""
+        """Find node by UID or regular ID"""
         if not self.client:
             raise StorageError("Not connected to Dgraph")
 
-        # Build query
-        query = f"""
-        {{
-            node(func: uid({item_id})) @filter(type({self.collection_name})) {{
-                uid
-                expand(_all_)
+        # Check if it's a Dgraph UID or regular ID
+        if item_id.startswith("0x"):
+            # Build query for UID
+            query = f"""
+            {{
+                node(func: uid({item_id})) @filter(type({self.collection_name})) {{
+                    uid
+                    expand(_all_)
+                }}
             }}
-        }}
-        """
+            """
+        else:
+            # Build query for regular ID field
+            query = f"""
+            {{
+                node(func: eq({self.collection_name}.id, "{item_id}")) @filter(type({self.collection_name})) {{
+                    uid
+                    expand(_all_)
+                }}
+            }}
+            """
 
         txn = self.client.txn(read_only=True)
         try:
@@ -245,10 +260,33 @@ class DgraphDAO(BaseDAO):
         if not self.client:
             raise StorageError("Not connected to Dgraph")
 
+        # Check if item_id is a Dgraph UID or regular ID
+        actual_uid = item_id
+        if not item_id.startswith("0x"):
+            # It's a regular ID, need to find the Dgraph UID
+            query = f"""
+            {{
+                node(func: eq({self.collection_name}.id, "{item_id}")) @filter(type({self.collection_name})) {{
+                    uid
+                }}
+            }}
+            """
+
+            txn = self.client.txn(read_only=True)
+            try:
+                response = txn.query(query)
+                result = json.loads(response.json)
+                if result.get("node") and len(result["node"]) > 0:
+                    actual_uid = result["node"][0]["uid"]
+                else:
+                    return False
+            finally:
+                txn.discard()
+
         txn = self.client.txn()
         try:
             # Add UID to data
-            update_data = {"uid": item_id}
+            update_data = {"uid": actual_uid}
 
             # Add prefixed fields - handle complex fields like in _to_dgraph_format
             for key, value in data.items():
@@ -279,10 +317,34 @@ class DgraphDAO(BaseDAO):
         if not self.client:
             raise StorageError("Not connected to Dgraph")
 
+        # Check if item_id is a Dgraph UID (starts with 0x) or a regular UUID
+        actual_uid = item_id
+        if not item_id.startswith("0x"):
+            # It's a regular ID, need to find the Dgraph UID
+            query = f"""
+            {{
+                node(func: eq({self.collection_name}.id, "{item_id}")) @filter(type({self.collection_name})) {{
+                    uid
+                }}
+            }}
+            """
+
+            txn = self.client.txn(read_only=True)
+            try:
+                response = txn.query(query)
+                result = json.loads(response.json)
+                if result.get("node") and len(result["node"]) > 0:
+                    actual_uid = result["node"][0]["uid"]
+                else:
+                    # Node not found
+                    return False
+            finally:
+                txn.discard()
+
         txn = self.client.txn()
         try:
             # Delete mutation using delete_json
-            mutation = pydgraph.Mutation(delete_json=json.dumps([{"uid": item_id}]).encode())
+            mutation = pydgraph.Mutation(delete_json=json.dumps([{"uid": actual_uid}]).encode())
 
             # Commit
             txn.mutate(mutation)
@@ -317,8 +379,31 @@ class DgraphDAO(BaseDAO):
 
     async def exists(self, item_id: str) -> bool:
         """Check if node exists"""
-        node = await self.find_by_id(item_id)
-        return node is not None
+        if not self.client:
+            raise StorageError("Not connected to Dgraph")
+
+        # Check both by UID and by ID field
+        if item_id.startswith("0x"):
+            # It's a Dgraph UID
+            node = await self.find_by_id(item_id)
+            return node is not None
+        else:
+            # It's a regular ID, query by field
+            query = f"""
+            {{
+                node(func: eq({self.collection_name}.id, "{item_id}")) @filter(type({self.collection_name})) {{
+                    uid
+                }}
+            }}
+            """
+
+            txn = self.client.txn(read_only=True)
+            try:
+                response = txn.query(query)
+                result = json.loads(response.json)
+                return result.get("node") and len(result["node"]) > 0
+            finally:
+                txn.discard()
 
     async def bulk_create(self, instances: list[StorageModel]) -> list[str]:
         """Bulk create nodes"""

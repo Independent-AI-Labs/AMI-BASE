@@ -44,6 +44,9 @@ class RedisDAO:
         """Connect to Redis server."""
         try:
             if not self.client:
+                if not self.config or not isinstance(self.config, StorageConfig):
+                    raise StorageError("Invalid Redis configuration")
+
                 self.client = redis.Redis(
                     host=self.config.host,
                     port=self.config.port,
@@ -78,10 +81,22 @@ class RedisDAO:
         """Create index key for field lookups."""
         return f"{self._key_prefix}idx:{field}:{value}"
 
-    async def create(self, data: dict[str, Any]) -> str:
+    async def create(self, data: dict[str, Any] | Any) -> str:
         """Create a new cache entry."""
         if not self.client:
             await self.connect()
+
+        # Handle StorageModel instances
+        from ..storage_model import StorageModel
+
+        if isinstance(data, StorageModel):
+            data = data.to_storage_dict()
+        elif not isinstance(data, dict):
+            # Try to convert to dict if it has the method
+            if hasattr(data, "to_storage_dict"):
+                data = data.to_storage_dict()
+            else:
+                raise ValueError(f"Cannot create from type {type(data)}")
 
         # Generate ID if not provided
         if "id" not in data:

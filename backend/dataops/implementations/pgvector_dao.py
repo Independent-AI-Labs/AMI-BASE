@@ -483,7 +483,7 @@ class PgVectorDAO(BaseDAO):
             raise ValueError("Either query_text or query must be provided")
         # Generate embedding for query
         embedding = await self._generate_embedding({"query": text})
-        return await self.vector_search(embedding, limit)
+        return await self.vector_search(embedding, query_text=text, limit=limit)
 
     async def _generate_embedding(self, data: dict) -> list[float]:
         """Generate embedding from data fields using sentence-transformers"""
