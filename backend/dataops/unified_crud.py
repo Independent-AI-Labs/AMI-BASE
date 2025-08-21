@@ -268,6 +268,13 @@ class UnifiedCRUD:
 
         # Get the instance
         return await dao.find_by_id(item_id)
+    
+    async def get(self, item_id: str, storage_name: str | None = None) -> T | None:
+        """Get instance by ID (convenience method without security context)"""
+        # For non-secured models, allow get without context
+        if self.security_enabled:
+            raise ValueError("Use read() method with security context for secured models")
+        return await self.read(item_id, context=None, storage_name=storage_name)
 
     async def update(self, instance_id: str, data: dict[str, Any], context: SecurityContext | None = None, storages: list[str] | None = None) -> T:
         """Update instance across storages"""

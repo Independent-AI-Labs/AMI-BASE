@@ -67,13 +67,20 @@ class DgraphDAO(BaseDAO):
                 index_type = "exact"  # Use exact tokenizer for hash indexes
             indexed_fields[field_name] = index_type
 
-        # Always index the ID field for lookups
-        schema_parts.append(f"{self.collection_name}.id: string @index(exact) .")
-
         # Add type definition
         type_def = f"type {self.collection_name} {{\n  {self.collection_name}.id"
+        
+        # Always index the ID field for lookups (add to indexed_fields)
+        indexed_fields["id"] = "exact"
 
+        # Add ID field first
+        schema_parts.append(f"{self.collection_name}.id: string @index(exact) .")
+        
         for field_name, field_info in self.model_cls.model_fields.items():
+            # Skip ID field if it exists in model (we already added it)
+            if field_name == "id":
+                continue
+                
             # Map Python types to Dgraph types
             dgraph_type = self._get_dgraph_type(field_info.annotation)
 
@@ -292,9 +299,10 @@ class DgraphDAO(BaseDAO):
             for key, value in data.items():
                 if key != "id":  # Skip ID field
                     # Handle list/dict fields that need JSON encoding
-                    if isinstance(value, list | dict) and key in ["acl", "auth_rules", "tasks", "flow_nodes"]:
+                    if isinstance(value, (list, dict)):
+                        # All complex objects should be JSON-encoded for Dgraph
                         update_data[f"{self.collection_name}.{key}"] = json.dumps(value, default=str)
-                    else:
+                    elif value is not None:
                         update_data[f"{self.collection_name}.{key}"] = value
 
             # Create mutation
@@ -665,19 +673,50 @@ class DgraphDAO(BaseDAO):
                 clean_data["graph_id"] = value  # Store Dgraph UID
             elif key.startswith(prefix):
                 field_name = key[len(prefix) :]
+                
+                # Handle Dgraph list fields that contain JSON strings
+                if isinstance(value, list) and len(value) == 1 and isinstance(value[0], str):
+                    # Dgraph returns JSON strings wrapped in an array
+                    if value[0].startswith(("[", "{")):
+                        try:
+                            clean_data[field_name] = json.loads(value[0])
+                        except json.JSONDecodeError:
+                            clean_data[field_name] = value[0]
+                    else:
+                        clean_data[field_name] = value[0]
                 # Parse JSON strings back to objects for string values that look like JSON
-                if isinstance(value, str) and value.startswith(("[", "{")):
+                elif isinstance(value, str) and value.startswith(("[", "{")):
                     try:
-                        clean_data[field_name] = json.loads(value)
+                        parsed = json.loads(value)
+                        # Check if it's still a JSON string (double-encoded)
+                        if isinstance(parsed, str) and parsed.startswith(("[", "{")):
+                            clean_data[field_name] = json.loads(parsed)
+                        else:
+                            clean_data[field_name] = parsed
                     except json.JSONDecodeError:
                         clean_data[field_name] = value
                 else:
                     clean_data[field_name] = value
             elif key not in ["dgraph.type"]:
                 # Handle fields without prefix (might come from expand(_all_))
-                if isinstance(value, str) and value.startswith(("[", "{")):
+                # Handle Dgraph list fields that contain JSON strings
+                if isinstance(value, list) and len(value) == 1 and isinstance(value[0], str):
+                    # Dgraph returns JSON strings wrapped in an array
+                    if value[0].startswith(("[", "{")):
+                        try:
+                            clean_data[key] = json.loads(value[0])
+                        except json.JSONDecodeError:
+                            clean_data[key] = value[0]
+                    else:
+                        clean_data[key] = value[0]
+                elif isinstance(value, str) and value.startswith(("[", "{")):
                     try:
-                        clean_data[key] = json.loads(value)
+                        parsed = json.loads(value)
+                        # Check if it's still a JSON string (double-encoded)
+                        if isinstance(parsed, str) and parsed.startswith(("[", "{")):
+                            clean_data[key] = json.loads(parsed)
+                        else:
+                            clean_data[key] = parsed
                     except json.JSONDecodeError:
                         clean_data[key] = value
                 else:

@@ -31,6 +31,9 @@ class PgVectorDAO(BaseDAO):
         """Establish connection pool to PostgreSQL"""
         if self.connection_pool:
             return
+        
+        if not self.config:
+            raise StorageError("No configuration provided for PgVector connection")
 
         try:
             # Parse connection string or build from config
