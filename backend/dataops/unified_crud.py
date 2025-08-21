@@ -87,6 +87,9 @@ class UnifiedCRUD:
     async def _create_sequential(self, instance: T, daos: dict[str, BaseDAO]) -> T:
         """Create sequentially in each storage"""
         for storage_name, dao in daos.items():
+            # Ensure DAO is connected
+            await self._ensure_dao_connected(dao, storage_name)
+
             operation = StorageOperation(storage_name=storage_name, operation="create", data=instance.to_storage_dict())
             try:
                 result_id = await dao.create(instance)
@@ -97,7 +100,7 @@ class UnifiedCRUD:
                 if not instance.id:
                     instance_dict = instance.to_storage_dict()
                     instance_dict["id"] = result_id
-                    instance = self.model_cls.from_storage_dict(instance_dict)
+                    instance = self.model_cls.from_storage_dict(instance_dict)  # type: ignore[assignment]
             except Exception as e:
                 operation.status = "failed"
                 operation.error = str(e)
@@ -134,7 +137,7 @@ class UnifiedCRUD:
         if not instance.id and results:
             instance_dict = instance.to_storage_dict()
             instance_dict["id"] = str(results[0])  # Ensure ID is string
-            instance = self.model_cls.from_storage_dict(instance_dict)
+            instance = self.model_cls.from_storage_dict(instance_dict)  # type: ignore[assignment]
 
         return instance
 
@@ -155,7 +158,7 @@ class UnifiedCRUD:
             # Create new instance with the ID (can't modify frozen Pydantic model)
             instance_dict = instance.to_storage_dict()
             instance_dict["id"] = result_id
-            instance = self.model_cls.from_storage_dict(instance_dict)
+            instance = self.model_cls.from_storage_dict(instance_dict)  # type: ignore[assignment]
             operation.status = "success"
             operation.result = result_id
         except Exception as e:
@@ -193,7 +196,7 @@ class UnifiedCRUD:
         # Create new instance with ID
         instance_dict = instance.to_storage_dict()
         instance_dict["id"] = result_id
-        instance = self.model_cls.from_storage_dict(instance_dict)
+        instance = self.model_cls.from_storage_dict(instance_dict)  # type: ignore[assignment]
 
         # Schedule background sync for other storages
         other_daos = {k: v for k, v in daos.items() if k != primary_name}
@@ -204,6 +207,9 @@ class UnifiedCRUD:
 
     async def _create_in_storage(self, instance: T, storage_name: str, dao: BaseDAO) -> str:
         """Helper to create in a specific storage"""
+        # Ensure DAO is connected
+        await self._ensure_dao_connected(dao, storage_name)
+
         operation = StorageOperation(storage_name=storage_name, operation="create", data=instance.to_storage_dict())
 
         try:
@@ -242,9 +248,8 @@ class UnifiedCRUD:
     async def read(self, item_id: str, context: SecurityContext | None = None, storage_name: str | None = None) -> T | None:
         """Read instance by ID with security context"""
         # Security check if enabled
-        if self.security_enabled:
-            if not context:
-                raise ValueError("Security context required when security is enabled")
+        if self.security_enabled and not context:
+            raise ValueError("Security context required when security is enabled")
             # In real implementation, check permissions here
 
         # Get the DAO for the storage
@@ -262,6 +267,13 @@ class UnifiedCRUD:
 
         # Get the instance
         return await dao.find_by_id(item_id)
+
+    async def get(self, item_id: str, storage_name: str | None = None) -> T | None:
+        """Get instance by ID (convenience method without security context)"""
+        # For non-secured models, allow get without context
+        if self.security_enabled:
+            raise ValueError("Use read() method with security context for secured models")
+        return await self.read(item_id, context=None, storage_name=storage_name)
 
     async def update(self, instance_id: str, data: dict[str, Any], context: SecurityContext | None = None, storages: list[str] | None = None) -> T:
         """Update instance across storages"""
@@ -298,7 +310,7 @@ class UnifiedCRUD:
     async def delete(self, instance_id: str, context: SecurityContext | None = None, storages: list[str] | None = None) -> bool:
         """Delete instance from storages"""
         # Get instance for security check
-        instance = await self.read(instance_id, context)
+        instance: Any = await self.read(instance_id, context)
         if not instance:
             return False
 
@@ -355,7 +367,7 @@ class UnifiedCRUD:
         """Bulk create multiple instances"""
         ids: list[str] = []
         for item in items:
-            instance = await self.create(item, context)
+            instance: Any = await self.create(item, context)
             ids.append(instance.id)
         return ids
 

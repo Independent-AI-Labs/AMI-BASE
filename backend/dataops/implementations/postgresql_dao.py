@@ -162,7 +162,7 @@ class PostgreSQLDAO:
         create_sql = f"""
             CREATE TABLE IF NOT EXISTS {table_name} (
                 id TEXT PRIMARY KEY,
-                data JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                data JSONB DEFAULT '{{}}'::jsonb,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 _metadata JSONB DEFAULT '{{}}'::jsonb
@@ -258,6 +258,21 @@ class PostgreSQLDAO:
             values = []
             placeholders = []
 
+            # Check if we need to add the 'data' column for legacy tables
+            existing_columns = await conn.fetch(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = $1 AND table_schema = 'public'
+                """,
+                table_name,
+            )
+            existing_names = {row["column_name"] for row in existing_columns}
+
+            # If table has 'data' column but we're not using it, add empty JSON
+            if "data" in existing_names and "data" not in data:
+                data["data"] = {}
+
             for i, (key, value) in enumerate(data.items(), 1):
                 if self._is_valid_identifier(key):
                     columns.append(key)
@@ -265,12 +280,9 @@ class PostgreSQLDAO:
                     placeholders.append(f"${i}")
 
             # Build UPDATE SET clause excluding id and updated_at (which is set separately)
-            update_cols = [f'{col} = EXCLUDED.{col}' for col in columns if col not in ('id', 'updated_at')]
-            if update_cols:
-                update_clause = ', '.join(update_cols) + ', updated_at = CURRENT_TIMESTAMP'
-            else:
-                update_clause = 'updated_at = CURRENT_TIMESTAMP'
-            
+            update_cols = [f"{col} = EXCLUDED.{col}" for col in columns if col not in ("id", "updated_at")]
+            update_clause = ", ".join(update_cols) + ", updated_at = CURRENT_TIMESTAMP" if update_cols else "updated_at = CURRENT_TIMESTAMP"
+
             insert_sql = f"""
                 INSERT INTO {table_name} ({', '.join(columns)})
                 VALUES ({', '.join(placeholders)})
@@ -497,3 +509,44 @@ class PostgreSQLDAO:
             else:
                 result[key] = value
         return result
+
+    async def find_by_id(self, item_id: str) -> dict[str, Any] | None:
+        """Find a record by ID."""
+        return await self.read(item_id)
+
+    async def find(self, filters: dict[str, Any] | None = None, limit: int | None = None, skip: int = 0) -> list[dict[str, Any]]:  # noqa: ARG002
+        """Find records with filters."""
+        return await self.query(filters)
+
+    async def get_model_schema(self, table_name: str) -> dict[str, Any]:
+        """Get table schema information."""
+        if not self.pool:
+            await self.connect()
+
+        fields = []
+        async with self.pool.acquire() as conn:  # type: ignore[union-attr]
+            rows = await conn.fetch(
+                """
+                SELECT
+                    column_name,
+                    data_type,
+                    is_nullable,
+                    column_default
+                FROM information_schema.columns
+                WHERE table_name = $1 AND table_schema = 'public'
+                ORDER BY ordinal_position
+                """,
+                table_name,
+            )
+
+            for row in rows:
+                fields.append(
+                    {
+                        "name": row["column_name"],
+                        "type": row["data_type"],
+                        "nullable": row["is_nullable"] == "YES",
+                        "default": row["column_default"],
+                    }
+                )
+
+        return {"fields": fields, "table_name": table_name}

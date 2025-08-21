@@ -32,6 +32,9 @@ class PgVectorDAO(BaseDAO):
         if self.connection_pool:
             return
 
+        if not self.config:
+            raise StorageError("No configuration provided for PgVector connection")
+
         try:
             # Parse connection string or build from config
             if self.config.connection_string:
@@ -437,7 +440,7 @@ class PgVectorDAO(BaseDAO):
             logger.warning(f"Failed to create some indexes: {e}")
 
     # Vector-specific methods
-    async def vector_search(self, embedding: list[float] | None = None, query_text: str | None = None, limit: int = 10, **kwargs) -> list[StorageModel]:
+    async def vector_search(self, embedding: list[float] | None = None, query_text: str | None = None, limit: int = 10, **kwargs) -> list[StorageModel]:  # noqa: ARG002
         """Search by vector similarity"""
         if not self.connection_pool:
             await self.connect()
@@ -483,7 +486,7 @@ class PgVectorDAO(BaseDAO):
             raise ValueError("Either query_text or query must be provided")
         # Generate embedding for query
         embedding = await self._generate_embedding({"query": text})
-        return await self.vector_search(embedding, limit)
+        return await self.vector_search(embedding, query_text=text, limit=limit)
 
     async def _generate_embedding(self, data: dict) -> list[float]:
         """Generate embedding from data fields using sentence-transformers"""
