@@ -68,7 +68,19 @@ def setup_venv(module_root: Path) -> Path:
         print(f"Installing module requirements from {requirements}...")
         subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", str(requirements)], cwd=str(module_root), check=True)
 
-    # Install pre-commit for git hooks
+    # Install base test requirements
+    base_test_reqs = base_path / "requirements-test.txt"
+    if base_test_reqs.exists():
+        print(f"Installing base test requirements from {base_test_reqs}...")
+        subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", str(base_test_reqs)], cwd=str(module_root), check=True)
+
+    # Install module test requirements if exists
+    module_test_reqs = module_root / "requirements-test.txt"
+    if module_test_reqs.exists():
+        print(f"Installing module test requirements from {module_test_reqs}...")
+        subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "-r", str(module_test_reqs)], cwd=str(module_root), check=True)
+
+    # Install pre-commit for git hooks (already in requirements-test.txt but ensure it's there)
     print("Installing pre-commit...")
     subprocess.run(["uv", "pip", "install", "--python", str(venv_python), "pre-commit"], cwd=str(module_root), check=True)
 
