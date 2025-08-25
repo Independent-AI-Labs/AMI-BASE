@@ -1,244 +1,96 @@
 #!/usr/bin/env python
-"""Generic test runner that ensures correct environment and handles all test execution."""
+"""Generic test runner using consolidated path utilities."""
 
-import os
 import subprocess
 import sys
 from pathlib import Path
 
+# Add base to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from backend.utils.path_utils import EnvironmentSetup, ModuleSetup, PathFinder  # noqa: E402
+
 
 class TestRunner:
-    """Generic test runner for submodules."""
+    """Generic test runner for AMI modules."""
 
-    def __init__(self, project_root=None):
+    def __init__(self, project_root: Path | None = None, project_name: str | None = None):
         """Initialize test runner.
 
         Args:
-            project_root: Path to project root. If None, uses parent of script location.
+            project_root: Path to project root (defaults to current location)
+            project_name: Name of the project for display
         """
+        # Use consolidated path utilities
         if project_root:
             self.project_root = Path(project_root).resolve()
         else:
-            # Default to parent of where this script is located
-            self.project_root = Path(__file__).parent.parent.resolve()
+            self.project_root = PathFinder.find_module_root(Path.cwd())
 
-        self.venv_path = self.project_root / ".venv"
-        self.venv_python = self._get_venv_python()
+        self.project_name = project_name or self.project_root.name
+        self.venv_python = EnvironmentSetup.get_venv_python(self.project_root)
 
-    def _get_venv_python(self):
-        """Get the path to the virtual environment Python executable."""
-        if sys.platform == "win32":
-            return self.venv_path / "Scripts" / "python.exe"
-        return self.venv_path / "bin" / "python"
+        # Ensure we're in the correct virtual environment
+        ModuleSetup.ensure_running_in_venv(Path(__file__))
 
-    def setup_environment(self):
-        """Set up the virtual environment by running setup.py if needed."""
-        # Check if venv exists
-        if not self.venv_path.exists():
-            print(f"Setting up environment in {self.project_root}...")
-            # Check if setup.py exists
-            setup_py = self.project_root / "setup.py"
-            if setup_py.exists():
-                # Import and run the setup directly
-                sys.path.insert(0, str(self.project_root))
-                try:
-                    from setup import run_environment_setup
-
-                    result = run_environment_setup()
-                    if result != 0:
-                        print("ERROR: Failed to set up environment")
-                        sys.exit(1)
-                except ImportError:
-                    print("WARNING: setup.py found but no run_environment_setup function")
-                    # Try running setup.py directly
-                    result = subprocess.run([sys.executable, str(setup_py)], cwd=self.project_root, check=False)
-                    if result.returncode != 0:
-                        print("ERROR: Failed to run setup.py")
-                        sys.exit(1)
-            else:
-                print(f"ERROR: No setup.py found in {self.project_root}")
-                print("Please create a virtual environment manually")
-                sys.exit(1)
-
-        # Verify venv Python exists
-        if not self.venv_python.exists():
-            print(f"ERROR: Virtual environment Python not found at {self.venv_python}")
-            print(f"Run: python setup.py in {self.project_root}")
-            sys.exit(1)
-
-        return self.venv_python
-
-    def ensure_base_module(self):
-        """Ensure base module is available in PYTHONPATH."""
-        base_paths = []
-
-        # Check if we have a setup.py with ensure_base_module
-        setup_py = self.project_root / "setup.py"
-        if setup_py.exists():
-            sys.path.insert(0, str(self.project_root))
-            try:
-                from setup import ensure_base_module
-
-                base_path = ensure_base_module()
-                if base_path:
-                    base_paths.append(base_path)
-            except ImportError:
-                pass
-
-        # Check for parent base directory
-        parent_base = self.project_root.parent / "base"
-        if parent_base.exists() and str(parent_base) not in base_paths:
-            base_paths.append(str(parent_base))
-
-        # Check for sibling base directory
-        sibling_base = self.project_root / "base"
-        if sibling_base.exists() and str(sibling_base) not in base_paths:
-            base_paths.append(str(sibling_base))
-
-        return base_paths
-
-    def run_tests(self, test_args):
-        """Run tests with the virtual environment Python.
+    def run_pytest(self, pytest_args):
+        """Run pytest with the provided arguments.
 
         Args:
-            test_args: List of arguments to pass to pytest
+            pytest_args: List of arguments to pass to pytest
 
         Returns:
             Exit code from pytest
         """
-        venv_python = self.setup_environment()
+        # Build the command
+        cmd = [str(self.venv_python), "-m", "pytest"] + pytest_args
 
-        # ALWAYS reinstall requirements to ensure all dependencies are present
-        print("Ensuring all dependencies are installed...")
-        setup_py = self.project_root / "setup.py"
-        if setup_py.exists():
-            result = subprocess.run([str(venv_python), str(setup_py)], cwd=self.project_root, capture_output=True, text=True, check=False)
-            if result.returncode != 0:
-                print("ERROR: Failed to install dependencies")
-                print(result.stderr)
-                sys.exit(1)
+        # Set working directory to project root
+        print(f"Running tests in {self.project_root}")
+        print(f"Command: {' '.join(cmd)}")
 
-        # Get base module paths
-        base_paths = self.ensure_base_module()
-
-        # Build the test command
-        cmd = [str(venv_python), "-m", "pytest"]
-
-        # Add default args if none provided
-        if not test_args:
-            test_args = ["tests/", "-v", "--tb=short"]
-
-        cmd.extend(test_args)
-
-        # Set environment variables
-        env = os.environ.copy()
-
-        # Build PYTHONPATH
-        python_paths = [str(self.project_root)]
-        python_paths.extend(base_paths)
-
-        # Add parent directory if we're a submodule
-        if self.project_root.parent.exists():
-            parent_path = str(self.project_root.parent)
-            if parent_path not in python_paths:
-                python_paths.append(parent_path)
-
-        env["PYTHONPATH"] = os.pathsep.join(python_paths)
-
-        # Run the tests
-        print(f"\nRunning: {' '.join(cmd)}")
-        print(f"Project Root: {self.project_root}")
-        print(f"PYTHONPATH: {env['PYTHONPATH']}")
-        print("=" * 60)
-
-        result = subprocess.run(cmd, cwd=self.project_root, env=env, check=False)
+        # Run pytest
+        result = subprocess.run(cmd, cwd=str(self.project_root), check=False)
         return result.returncode
 
-    def clean_environment(self):
-        """Clean the virtual environment."""
-        print(f"Cleaning environment in {self.project_root}...")
-        import shutil
-
-        if self.venv_path.exists():
-            shutil.rmtree(self.venv_path)
-        print("Environment cleaned. Re-run to rebuild.")
-        return 0
-
-    def open_shell(self):
-        """Open a shell in the test environment."""
-        print(f"Opening shell in test environment at {self.project_root}...")
-        venv_python = self.setup_environment()
-
-        # Get base module paths
-        base_paths = self.ensure_base_module()
-
-        env = os.environ.copy()
-        # Build PYTHONPATH
-        python_paths = [str(self.project_root)]
-        python_paths.extend(base_paths)
-        env["PYTHONPATH"] = os.pathsep.join(python_paths)
-
-        if sys.platform == "win32":
-            # On Windows, activate the venv and open cmd
-            activate_script = self.venv_path / "Scripts" / "activate.bat"
-            subprocess.run(["cmd", "/k", str(activate_script)], cwd=self.project_root, env=env, check=False)
-        else:
-            # On Unix, start a shell with activated venv
-            subprocess.run([str(venv_python)], cwd=self.project_root, env=env, check=False)
-        return 0
-
-    def show_help(self, project_name="Project"):
-        """Show help message.
+    def run(self, args):
+        """Main run method.
 
         Args:
-            project_name: Name of the project for the help message
+            args: Command line arguments
+
+        Returns:
+            Exit code
         """
-        print(f"Test Runner for {project_name}")
-        print("=" * 40)
-        print("\nUsage:")
-        print("  python run_tests.py [pytest args]")
-        print("\nExamples:")
-        print("  python run_tests.py                    # Run all tests")
-        print("  python run_tests.py tests/unit/        # Run unit tests")
-        print("  python run_tests.py -k test_properties # Run tests matching pattern")
-        print("  python run_tests.py -x                 # Stop on first failure")
-        print("  python run_tests.py --lf               # Run last failed tests")
-        print("\nSpecial commands:")
-        print("  python run_tests.py --clean            # Clean and rebuild environment")
-        print("  python run_tests.py --shell            # Open shell in test environment")
-        return 0
+        print("=" * 60)
+        print(f"Running {self.project_name} Tests")
+        print("=" * 60)
+
+        # Run pytest with all provided arguments
+        return self.run_pytest(args)
 
 
-def main(project_root=None, project_name="Project"):
+def main(project_root: Path | None = None, project_name: str | None = None):
     """Main entry point for test runner.
 
     Args:
-        project_root: Optional path to project root
-        project_name: Name of the project for help message
+        project_root: Path to project root
+        project_name: Name of the project
 
     Returns:
         Exit code
     """
-    # Create runner
-    runner = TestRunner(project_root)
+    runner = TestRunner(project_root=project_root, project_name=project_name)
 
-    # Get test arguments from command line
-    test_args = sys.argv[1:]
+    # Get command line arguments (skip script name)
+    args = sys.argv[1:]
 
-    # Handle special commands
-    if test_args and test_args[0] == "--help":
-        return runner.show_help(project_name)
+    # Add default timeout if not specified
+    if "--timeout" not in " ".join(args):
+        args.extend(["--timeout", "600"])  # 10 minute default timeout
 
-    if test_args and test_args[0] == "--clean":
-        return runner.clean_environment()
-
-    if test_args and test_args[0] == "--shell":
-        return runner.open_shell()
-
-    # Run the tests
-    return runner.run_tests(test_args)
+    return runner.run(args)
 
 
 if __name__ == "__main__":
-    # When run directly, use current directory as project root
     sys.exit(main())
