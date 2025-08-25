@@ -44,7 +44,7 @@ class EnvironmentSetup:
         if not self.venv_path.exists():
             print(f"\n[1/5] Creating virtual environment at {self.venv_path}...")
             try:
-                subprocess.run(["uv", "venv", str(self.venv_path)], check=True, cwd=self.project_root)
+                subprocess.run(["uv", "venv", str(self.venv_path), "--python", "python3.12"], check=True, cwd=self.project_root)
                 print("[OK] Virtual environment created")
                 return True
             except subprocess.CalledProcessError as e:
@@ -132,8 +132,55 @@ class EnvironmentSetup:
             print("\n[4/5] No setup.py or pyproject.toml found - skipping package installation")
             return True
 
+    def copy_platform_config(self) -> bool:
+        """Copy platform-specific pre-commit config from base/configs."""
+        # Find base module path
+        base_path = None
+
+        # Check if we're in base module
+        if (self.project_root / "scripts" / "setup_env.py").exists():
+            base_path = self.project_root
+        # Check parent directory for base
+        elif (self.project_root.parent / "base" / "configs").exists():
+            base_path = self.project_root.parent / "base"
+        # Check if base is a sibling
+        elif (self.project_root / "base" / "configs").exists():
+            base_path = self.project_root / "base"
+
+        if not base_path:
+            print("[WARN] Could not find base module configs directory")
+            return False
+
+        configs_dir = base_path / "configs"
+
+        # Determine which config to use based on platform
+        if sys.platform == "win32":
+            source_config = configs_dir / ".pre-commit-config.win.yaml"
+        else:
+            source_config = configs_dir / ".pre-commit-config.unix.yaml"
+
+        if not source_config.exists():
+            print(f"[WARN] Platform config not found: {source_config}")
+            return False
+
+        # Copy to project root
+        target_config = self.project_root / ".pre-commit-config.yaml"
+
+        try:
+            import shutil
+
+            shutil.copy2(source_config, target_config)
+            print(f"[OK] Copied platform-specific pre-commit config from {source_config.name}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to copy pre-commit config: {e}")
+            return False
+
     def install_pre_commit_hooks(self) -> bool:
         """Install pre-commit hooks if configuration exists."""
+        # First try to copy platform-specific config
+        self.copy_platform_config()
+
         pre_commit_config = self.project_root / ".pre-commit-config.yaml"
 
         # Check for install_hooks script first (project-specific)
