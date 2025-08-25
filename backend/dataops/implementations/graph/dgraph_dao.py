@@ -27,10 +27,10 @@ class DgraphDAO(
     DgraphUtilsMixin,
 ):
     """DAO implementation for Dgraph graph database.
-    
+
     This class combines all Dgraph operations through mixins:
     - DgraphCreateMixin: CREATE operations
-    - DgraphReadMixin: READ operations  
+    - DgraphReadMixin: READ operations
     - DgraphUpdateMixin: UPDATE operations
     - DgraphDeleteMixin: DELETE operations
     - DgraphGraphMixin: Graph-specific operations (k-hop, shortest path, etc.)
@@ -40,7 +40,7 @@ class DgraphDAO(
 
     def __init__(self, model_cls: type[StorageModel], config: StorageConfig):
         """Initialize Dgraph DAO.
-        
+
         Args:
             model_cls: Model class for this DAO
             config: Storage configuration

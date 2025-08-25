@@ -85,7 +85,7 @@ class DgraphGraphMixin:
             path as shortest(from: {start_id}, to: {end_id}, depth: {max_depth}) {{
                 {self.collection_name}.id
             }}
-            
+
             result(func: uid(path)) {{
                 uid
                 {self.collection_name}.id
@@ -220,7 +220,7 @@ class DgraphGraphMixin:
                     count(uid)
                 }}
                 has.edge @facets {{
-                    count(uid) 
+                    count(uid)
                 }}
                 expand(_all_) {{
                     uid
