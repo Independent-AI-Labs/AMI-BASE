@@ -417,6 +417,17 @@ class UnifiedCRUD:
         """Clear operations log"""
         self._operations_log = []
 
+    async def cleanup(self):
+        """Disconnect all connected DAOs"""
+        all_daos = self.model_cls.get_all_daos()
+        for name in self._connected_daos:
+            if name in all_daos:
+                try:
+                    await all_daos[name].disconnect()
+                except Exception as e:
+                    logger.warning(f"Failed to disconnect {name} DAO during cleanup: {e}")
+        self._connected_daos.clear()
+
 
 # Global registry for model CRUD instances
 _crud_registry: dict[type[StorageModel], UnifiedCRUD] = {}
