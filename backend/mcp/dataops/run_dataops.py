@@ -5,12 +5,30 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Add base to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+# STANDARD IMPORT SETUP - DO NOT MODIFY
+current_file = Path(__file__).resolve()
+orchestrator_root = current_file
+while orchestrator_root != orchestrator_root.parent:
+    if (orchestrator_root / ".git").exists() and (orchestrator_root / "base").exists():
+        break
+    orchestrator_root = orchestrator_root.parent
+else:
+    raise RuntimeError(f"Could not find orchestrator root from {current_file}")
 
-from backend.utils.path_utils import ModuleSetup  # noqa: E402
+if str(orchestrator_root) not in sys.path:
+    sys.path.insert(0, str(orchestrator_root))
 
-# Ensure we're running in the correct virtual environment
+module_names = {"base", "browser", "files", "compliance", "domains", "streams"}
+module_root = current_file.parent
+while module_root != orchestrator_root:
+    if module_root.name in module_names:
+        if str(module_root) not in sys.path:
+            sys.path.insert(0, str(module_root))
+        break
+    module_root = module_root.parent
+
+from base.backend.utils.module_setup import ModuleSetup  # noqa: E402
+
 ModuleSetup.ensure_running_in_venv(Path(__file__))
 
 # Now import the server components

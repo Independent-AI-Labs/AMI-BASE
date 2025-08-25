@@ -32,6 +32,43 @@ class StorageConfig(IPConfig):
     connection_string: str | None = None
     database: str | None = None
 
+    @classmethod
+    def from_dict(cls, config_dict: dict[str, Any]) -> "StorageConfig":
+        """Create StorageConfig from dictionary (e.g., from YAML)"""
+        # Map YAML type strings to StorageType enum
+        type_mapping = {
+            "graph": StorageType.GRAPH,
+            "vector": StorageType.VECTOR,
+            "relational": StorageType.RELATIONAL,
+            "document": StorageType.DOCUMENT,
+            "cache": StorageType.CACHE,
+            "timeseries": StorageType.TIMESERIES,
+            "file": StorageType.FILE,
+        }
+
+        # Extract relevant fields
+        storage_type = type_mapping.get(config_dict.get("type", ""), None)
+        if not storage_type:
+            raise ValueError(f"Unknown storage type: {config_dict.get('type')}")
+
+        # Build the config with options
+        options = config_dict.get("options", {})
+
+        # Ensure database is always a string if provided
+        database = config_dict.get("database")
+        if database is not None:
+            database = str(database)
+
+        return cls(
+            storage_type=storage_type,
+            host=config_dict.get("host", "localhost"),
+            port=config_dict.get("port"),
+            database=database,
+            username=config_dict.get("username"),
+            password=config_dict.get("password"),
+            options=options,
+        )
+
     def model_post_init(self, __context: Any) -> None:
         # Set default ports if not specified
         if self.port is None:
