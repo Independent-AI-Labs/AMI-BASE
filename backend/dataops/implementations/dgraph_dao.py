@@ -244,10 +244,19 @@ class DgraphDAO(BaseDAO):
         # Build DQL query
         dql = self._build_dql_query(query, limit=limit, offset=skip)
 
+        # Debug logging
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.debug(f"DQL Query: {dql}")
+
         txn = self.client.txn(read_only=True)
         try:
             response = txn.query(dql)
             data = json.loads(response.json)
+
+            # Debug the response
+            logger.debug(f"Query response: {data}")
 
             result_key = f"{self.collection_name}_results"
             results = []
@@ -292,18 +301,33 @@ class DgraphDAO(BaseDAO):
 
         txn = self.client.txn()
         try:
-            # Add UID to data
+            # First, delete old values for fields being updated (to prevent multi-valued fields)
+            delete_data = {"uid": actual_uid}
+            for key in data:
+                if key != "id":
+                    # Delete existing values for this field
+                    delete_data[f"{self.collection_name}.{key}"] = None
+
+            # Delete mutation to clear old values
+            del_mutation = pydgraph.Mutation(delete_json=json.dumps(delete_data, default=str).encode())
+            txn.mutate(del_mutation)
+
+            # Now set new values
             update_data = {"uid": actual_uid}
 
-            # Add prefixed fields - let set_json handle the encoding
+            # Add prefixed fields with proper JSON encoding for complex types
             for key, value in data.items():
                 if key != "id" and value is not None:  # Skip ID field and None values
-                    update_data[f"{self.collection_name}.{key}"] = value
+                    if isinstance(value, list | dict):
+                        # Complex objects should be stored as JSON strings
+                        update_data[f"{self.collection_name}.{key}"] = json.dumps(value, default=str)
+                    else:
+                        update_data[f"{self.collection_name}.{key}"] = value
 
             # Create mutation - set_json will handle JSON encoding
             mutation = pydgraph.Mutation(set_json=json.dumps(update_data, default=str).encode())
 
-            # Commit
+            # Commit both mutations
             txn.mutate(mutation)
             txn.commit()
 
